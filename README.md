@@ -32,15 +32,33 @@ Crea un proyecto nuevo y, en **Authentication**, configura lo siguiente:
 
 ### 2. Crear la base de datos
 
-Opción A, desde el navegador: abre **SQL Editor** y ejecuta, en orden, cada archivo de `supabase/migrations/` (`001_roles_perfiles.sql`, `002_ubicaciones.sql`, `003_catalogo.sql`, `004_movimientos_stock.sql`, `005_salidas_traslados.sql`, `006_trazabilidad.sql` y `007_panel_informes.sql`).
+**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene las siete migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 7 filas, del `001_roles_perfiles.sql` al `007_panel_informes.sql`.
 
-Opción B, con la CLI:
+**Opción alternativa, con la CLI:**
 
 ```bash
 supabase login
 supabase link --project-ref TU_REF_DE_PROYECTO
 supabase db push
 ```
+
+También puedes ejecutar los archivos de `supabase/migrations/` uno a uno en el SQL Editor, siempre en orden.
+
+Todas las migraciones se pueden **ejecutar más de una vez** sin error y sin duplicar nada: si algo falla a mitad, se corrige la causa y se vuelve a ejecutar el mismo archivo. Además, cada una comprueba que la anterior esté aplicada; si no lo está, lo dice con un mensaje claro en lugar de un error técnico. Para ver cuáles están aplicadas:
+
+```sql
+select * from public.sga_migraciones order by numero;
+```
+
+#### Si el SQL Editor da error
+
+| Mensaje | Causa y solución |
+|---|---|
+| `Falta la migración anterior: ejecuta primero…` | Se han ejecutado en otro orden. Ejecuta la que indica el mensaje y repite. |
+| `syntax error at or near "```"` | Se ha copiado desde el listado `.md` o una web, incluyendo las líneas de marcado. Copia desde el archivo `.sql` original, o en GitHub desde el botón **Raw**. |
+| `syntax error` al principio de una línea con un número | Se han copiado los números de línea de la vista de código de GitHub. Usa el botón **Raw** o **Copy raw file**. |
+| `relation "…" already exists` | Es la versión antigua de las migraciones. Usa las actuales de este repositorio, que se pueden repetir. |
+| `must be owner of table objects` | El proyecto no es de Supabase Cloud o es una instalación propia sin la extensión `supautils`. En Supabase Cloud no ocurre. |
 
 ### 3. Desplegar la función de gestión de usuarios
 
@@ -250,12 +268,13 @@ Las exportaciones incluyen todas las filas del informe, no solo las de la vista 
 | 006 | Vistas de trazabilidad y resumen de lotes |
 | 007 | Indicadores del panel, series para gráficos e informes |
 
-Las siete se aplican en orden sobre un proyecto de Supabase vacío. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
+Las siete se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
 
 ## Estructura
 
 ```
 supabase/
+  instalar_todo.sql     las 7 migraciones en un solo archivo para el SQL Editor
   migrations/           esquema SQL por fases
   functions/            Edge Functions (gestión de usuarios)
   scripts/              administrador inicial y datos de ejemplo

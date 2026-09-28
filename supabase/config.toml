@@ -1,0 +1,15 @@
+# Configuración para desarrollo local con la CLI de Supabase (supabase start)
+project_id = "sga"
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/crear-contrasena"]
+# Nadie puede registrarse por su cuenta: el administrador invita.
+enable_signup = false
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[functions.gestionar-usuarios]
+verify_jwt = true
