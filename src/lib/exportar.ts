@@ -165,22 +165,49 @@ export async function exportarPdf<T>({ archivo, titulo, subtitulo, columnas, fil
 
   const totales = calcularTotales(columnas, filas);
   const hayTotales = totales.some((t) => t !== null);
-  const pesoTotal = columnas.reduce((s, c) => s + (c.ancho ?? 12), 0);
   const anchoUtil = anchoPagina - 24;
+  const tamano = columnas.length > 10 ? 6.5 : 7.5;
+  const relleno = 1.4;
+
+  // Anchos medidos sobre el texto real: mínimo = la palabra o código más largo (nunca se parte),
+  // preferido = el texto completo más largo (hasta 60 mm). El espacio que sobra se reparte.
+  const cuerpo = filas.map((f) => columnas.map((c) => paraPdf(formatearCelda(c.valor(f), c.tipo))));
+  const muestra = cuerpo.slice(0, 300);
+  const medir = (t: string, negrita = false) => {
+    doc.setFont('helvetica', negrita ? 'bold' : 'normal');
+    doc.setFontSize(tamano);
+    return doc.getTextWidth(t) + relleno * 2 + 0.6;
+  };
+  const minimos = columnas.map((c, i) => {
+    const palabras = [...paraPdf(c.titulo).split(/\s+/).map((w) => medir(w, true)), ...muestra.flatMap((f) => f[i].split(/\s+/).map((w) => medir(w)))];
+    return Math.max(8, ...palabras);
+  });
+  const preferidos = columnas.map((c, i) => Math.min(60, Math.max(minimos[i], medir(paraPdf(c.titulo), true), ...muestra.map((f) => medir(f[i])))));
+  const sumaMin = minimos.reduce((a, b) => a + b, 0);
+  const sumaPref = preferidos.reduce((a, b) => a + b, 0);
+  let anchos: number[];
+  if (sumaPref <= anchoUtil) anchos = preferidos.map((w) => (w * anchoUtil) / sumaPref);
+  else if (sumaMin >= anchoUtil) anchos = minimos.map((w) => (w * anchoUtil) / sumaMin);
+  else {
+    const sobra = anchoUtil - sumaMin;
+    const margen = preferidos.map((w, i) => w - minimos[i]);
+    const sumaMargen = margen.reduce((a, b) => a + b, 0) || 1;
+    anchos = minimos.map((w, i) => w + (sobra * margen[i]) / sumaMargen);
+  }
 
   autoTable(doc, {
     startY: 26,
     margin: { left: 12, right: 12 },
     head: [columnas.map((c) => paraPdf(c.titulo))],
-    body: filas.map((f) => columnas.map((c) => paraPdf(formatearCelda(c.valor(f), c.tipo)))),
+    body: cuerpo,
     foot: hayTotales ? [columnas.map((_, i) => (totales[i] !== null ? formatearCelda(totales[i], 'numero') : i === 0 ? 'Total' : ''))] : undefined,
     showFoot: 'lastPage',
-    styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 1.6, overflow: 'linebreak', textColor: [22, 33, 44] },
+    styles: { font: 'helvetica', fontSize: tamano, cellPadding: relleno, overflow: 'linebreak', textColor: [22, 33, 44] },
     headStyles: { fillColor: [19, 55, 96], textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [220, 230, 242], textColor: [22, 33, 44], fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [246, 247, 249] },
     columnStyles: Object.fromEntries(
-      columnas.map((c, i) => [i, { cellWidth: (anchoUtil * (c.ancho ?? 12)) / pesoTotal, halign: c.tipo === 'numero' || c.tipo === 'porcentaje' ? 'right' : 'left' }]),
+      columnas.map((c, i) => [i, { cellWidth: anchos[i], halign: c.tipo === 'numero' || c.tipo === 'porcentaje' ? 'right' : 'left' }]),
     ),
     didDrawPage: () => {
       const n = doc.getNumberOfPages();

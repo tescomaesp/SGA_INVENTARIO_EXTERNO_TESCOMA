@@ -23,3 +23,17 @@ export const PREFIJO_QR_UBICACION = 'UBI:';
 
 /** Prefijo del contenido de los QR de producto: PRD:<SKU>. */
 export const PREFIJO_QR_PRODUCTO = 'PRD:';
+
+export type LecturaCodigo = { tipo: 'ubicacion'; codigo: string } | { tipo: 'producto'; sku: string } | { tipo: 'desconocido'; texto: string };
+
+/**
+ * Interpreta un código leído con la cámara o con una pistola lectora:
+ * QR de ubicación (UBI:…), QR de producto (PRD:SKU) o código de barras con el SKU (P000123).
+ */
+export function interpretarCodigo(texto: string): LecturaCodigo {
+  const t = texto.trim();
+  if (t.startsWith(PREFIJO_QR_UBICACION)) return { tipo: 'ubicacion', codigo: normalizarCodigo(t.slice(PREFIJO_QR_UBICACION.length)) };
+  if (t.startsWith(PREFIJO_QR_PRODUCTO)) return { tipo: 'producto', sku: t.slice(PREFIJO_QR_PRODUCTO.length).toUpperCase() };
+  if (/^P\d{6,}$/i.test(t)) return { tipo: 'producto', sku: t.toUpperCase() };
+  return { tipo: 'desconocido', texto: t };
+}
