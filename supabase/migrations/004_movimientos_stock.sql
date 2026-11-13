@@ -358,13 +358,17 @@ select
   p.contacto_id,  ct.nombre as contacto_nombre,
   coalesce(st.unidades, 0)::numeric      as stock_total,
   coalesce(st.ubicaciones, 0)::integer   as ubicaciones,
-  (p.stock_minimo > 0 and coalesce(st.unidades, 0) < p.stock_minimo) as stock_bajo
+  (p.stock_minimo > 0 and coalesce(st.unidades, 0) < p.stock_minimo) as stock_bajo,
+  coalesce(st.codigos, '')               as codigos_ubicacion   -- para filtrar el catálogo por ubicación
 from public.productos p
 join public.colecciones c on c.id = p.coleccion_id
 left join public.contactos ct on ct.id = p.contacto_id
 left join lateral (
-  select sum(s.cantidad) as unidades, count(distinct s.hueco_id) as ubicaciones
-  from public.stock_por_ubicacion s where s.producto_id = p.id
+  select sum(s.cantidad) as unidades, count(distinct s.hueco_id) as ubicaciones,
+         string_agg(distinct h.codigo_completo, ' ') as codigos
+  from public.stock_por_ubicacion s
+  join public.v_huecos h on h.id = s.hueco_id
+  where s.producto_id = p.id
 ) st on true;
 
 -- Stock con la ruta del hueco y el lote (ficha de producto y ficha de hueco)
