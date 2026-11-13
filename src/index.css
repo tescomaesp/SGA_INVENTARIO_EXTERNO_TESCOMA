@@ -64,3 +64,8 @@ dialog::backdrop {
   body { background: #fff; }
   @page { margin: 14mm 12mm; }
 }
+
+/* Al enfocar un campo, que no quede detrás de la barra fija inferior de los formularios en el móvil */
+html {
+  scroll-padding-bottom: 6rem;
+}
