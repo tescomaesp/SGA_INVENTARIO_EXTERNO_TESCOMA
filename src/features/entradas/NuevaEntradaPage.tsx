@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, ChevronDown, PackagePlus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, PackagePlus, QrCode, RotateCcw } from 'lucide-react';
+import { EscanerQR } from '@/components/EscanerQR';
+import { useNotificar } from '@/components/Notificaciones';
+import { interpretarCodigo } from '@/lib/codigos';
 import { CampoFoto } from '@/components/CampoFoto';
 import { Combobox } from '@/components/Combobox';
 import { Miniatura } from '@/components/Miniatura';
@@ -27,7 +30,9 @@ interface Confirmada {
 export function NuevaEntradaPage() {
   const { puede } = useAuth();
   const navigate = useNavigate();
+  const notificar = useNotificar();
   const [params] = useSearchParams();
+  const [escaneando, setEscaneando] = useState(false);
 
   // 1. Producto
   const [producto, setProducto] = useState<Producto | null>(null);
@@ -52,7 +57,8 @@ export function NuevaEntradaPage() {
   const [documento, setDocumento] = useState('');
   const [notas, setNotas] = useState('');
 
-  const [errores, setErrores] = useState<Record<string, string>>({});
+  // Tras el primer intento de envío, los avisos se recalculan en vivo y desaparecen al corregir cada campo
+  const [intentado, setIntentado] = useState(false);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [confirmada, setConfirmada] = useState<Confirmada | null>(null);
@@ -131,11 +137,12 @@ export function NuevaEntradaPage() {
     if (caducidad && !lote.trim()) e.lote = 'Para indicar la caducidad hay que indicar el lote.';
     return e;
   };
+  const errores = intentado ? validar() : {};
 
   async function enviar(ev: FormEvent) {
     ev.preventDefault();
     const e = validar();
-    setErrores(e);
+    setIntentado(true);
     setErrorGeneral(null);
     if (Object.keys(e).length) {
       document.getElementById(`campo-${Object.keys(e)[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -184,7 +191,7 @@ export function NuevaEntradaPage() {
     setLote('');
     setCaducidad('');
     setNotas('');
-    setErrores({});
+    setIntentado(false);
   }
 
   const coleccionesActivas = useMemo(() => colecciones ?? [], [colecciones]);
@@ -227,7 +234,7 @@ export function NuevaEntradaPage() {
       </Link>
       <h1 className="mb-6 text-4xl">Registrar entrada</h1>
 
-      <form onSubmit={enviar} noValidate className="space-y-5">
+      <form onSubmit={enviar} noValidate className="space-y-5 pb-4">
         <SeccionFormulario numero={1} titulo="Producto">
           <div id="campo-producto">
             {producto ? (
@@ -269,6 +276,10 @@ export function NuevaEntradaPage() {
                   )}
                   extra={texto.trim().length >= 2 ? { contenido: <>Crear producto nuevo «{texto.trim()}»</>, onElegir: () => setEsNuevo(true) } : null}
                 />
+                <button type="button" onClick={() => setEscaneando(true)} className="mt-2 inline-flex min-h-[44px] items-center gap-2 font-semibold text-acero hover:underline">
+                  <QrCode className="h-4 w-4" aria-hidden />
+                  Escanear la etiqueta de un producto
+                </button>
               </Campo>
             )}
           </div>
@@ -373,6 +384,22 @@ export function NuevaEntradaPage() {
           </Boton>
         </div>
       </form>
+
+      <EscanerQR
+        abierto={escaneando}
+        titulo="Escanear producto"
+        instrucciones="Apunta a la etiqueta del producto (QR o código de barras)."
+        onCerrar={() => setEscaneando(false)}
+        onLeer={async (t) => {
+          setEscaneando(false);
+          const l = interpretarCodigo(t);
+          if (l.tipo !== 'producto') return notificar('Ese código no es la etiqueta de un producto', 'error');
+          const p = await catalogoApi.productoPorSku(l.sku);
+          if (!p) return notificar(`No existe ningún producto con el código ${l.sku}`, 'error');
+          if (!p.activo) return notificar(`${p.nombre} está dado de baja`, 'error');
+          elegirProducto(p);
+        }}
+      />
     </div>
   );
 }
