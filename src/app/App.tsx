@@ -29,7 +29,7 @@ import { Layout } from './Layout';
 
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <ProveedorNotificaciones>
         <ProveedorAuth>
           <Suspense fallback={<Cargando />}>
