@@ -32,7 +32,9 @@ Crea un proyecto nuevo y, en **Authentication**, configura lo siguiente:
 
 ### 2. Crear la base de datos
 
-**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene las siete migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 7 filas, del `001_roles_perfiles.sql` al `007_panel_informes.sql`.
+**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene todas las migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 8 filas, del `001_roles_perfiles.sql` al `008_mejoras.sql`.
+
+**Actualizar una instalación anterior:** ejecuta el `instalar_todo.sql` nuevo igual que la primera vez. Como todas las migraciones se pueden repetir, aplica solo lo que falta y conserva todos los datos.
 
 **Opción alternativa, con la CLI:**
 
@@ -86,7 +88,16 @@ npm run dev               # http://localhost:5173
 
 ### 6. Publicar
 
-Sube el repositorio a Vercel o Netlify, define las variables de `.env` en su panel y usa `npm run build` como comando de compilación (carpeta de salida `dist`). Los archivos `vercel.json` y `public/_redirects` ya están incluidos para que las rutas funcionen al recargar la página. Recuerda actualizar *Site URL*, *Redirect URLs* y el secreto `SITE_URL` con el dominio final.
+**Con GitHub Pages (configurado en este repositorio).** El archivo `.github/workflows/publicar.yml` compila y publica la aplicación automáticamente cada vez que cambia la rama `main`. La dirección es `https://<usuario>.github.io/<repositorio>/`. Hay que configurarlo una sola vez en **Settings** del repositorio:
+
+1. **Pages > Build and deployment > Source:** elige **GitHub Actions**.
+2. **Secrets and variables > Actions > Variables:** crea `VITE_SUPABASE_URL` con la URL del proyecto (Supabase > Project Settings > Data API) y, opcionalmente, `VITE_NOMBRE_EMPRESA` con el nombre que aparecerá en la pantalla de acceso.
+3. **Secrets and variables > Actions > Secrets:** crea `VITE_SUPABASE_ANON_KEY` con la clave pública *anon* (Supabase > Project Settings > API Keys).
+4. En **Actions**, abre «Publicar en GitHub Pages» y pulsa **Run workflow**, o haz cualquier cambio en `main`.
+
+En Supabase, la *Site URL*, las *Redirect URLs* y el secreto `SITE_URL` de la función deben usar la dirección completa con la subcarpeta, por ejemplo `https://usuario.github.io/repositorio` y `https://usuario.github.io/repositorio/crear-contrasena`.
+
+**Con Vercel o Netlify.** Importa el repositorio, define las variables de `.env` en su panel y usa `npm run build` como comando de compilación (carpeta de salida `dist`). Los archivos `vercel.json` y `public/_redirects` ya están incluidos para que las rutas funcionen al recargar la página. Recuerda actualizar *Site URL*, *Redirect URLs* y el secreto `SITE_URL` con el dominio final.
 
 ## Roles
 
@@ -151,7 +162,15 @@ Como consecuencia, un hueco que ha tenido movimientos ya no se puede eliminar, y
 
 La base de datos vuelve a comprobarlo todo: que haya stock suficiente en esa línea exacta (hueco y lote), que el destino admita la mercancía, el motivo y los permisos. Las filas de stock implicadas quedan bloqueadas durante la operación, así que dos personas no pueden sacar la misma mercancía a la vez.
 
-**Etiquetas de producto.** Desde la ficha de un producto (con el número de copias que quieras) o desde **Productos > Colecciones** (una etiqueta por cada producto de la colección). Usan los mismos formatos que las de ubicación. El QR contiene `PRD:` seguido del SKU; al escanearlo en una salida o traslado se localiza el producto al instante.
+**Etiquetas de producto.** Desde la ficha de un producto (con el número de copias que quieras) o desde **Productos > Colecciones** (una etiqueta por cada producto de la colección). Usan los mismos formatos que las de ubicación y llevan dos códigos: un **QR** con `PRD:` y el SKU, y un **código de barras Code 128** con el SKU, que leen también las pistolas lectoras convencionales.
+
+**Escáner.** La cámara del móvil o la tablet lee tanto QR como códigos de barras (Code 128, Code 39, EAN-13, EAN-8, UPC, ITF y Data Matrix). Se usa en tres sitios:
+
+- **Entradas:** escanear la etiqueta de un hueco para elegir dónde se deja la mercancía, o la de un producto que ya existe para no tener que buscarlo.
+- **Salidas y traslados:** escanear la etiqueta del producto o la del hueco.
+- **Pistola lectora USB o Bluetooth:** funciona sin configurar nada. Actúa como un teclado que «escribe» el código, así que basta con tener el cursor en la casilla de código de las salidas y traslados.
+
+Si se escanea una etiqueta del tipo equivocado (por ejemplo, la de un hueco cuando se espera un producto), la aplicación lo indica en lugar de fallar.
 
 ## Trazabilidad
 
@@ -203,6 +222,8 @@ Cada informe muestra una vista previa de las 100 primeras filas, con totales cal
 - **PDF:** con título, filtros aplicados, fecha, autor y número de página. Si el informe tiene más de seis columnas, sale en horizontal.
 
 Las exportaciones incluyen todas las filas del informe, no solo las de la vista previa, hasta un máximo de 100.000. Para listados muy largos, Excel es el formato más cómodo.
+
+**Catálogo.** El listado de productos se filtra por nombre o SKU, colección, persona de contacto, stock bajo y **ubicación**. En la ubicación vale cualquier parte de un código: `P01` (todo un pasillo), `P01-E03` (una estantería) o el código completo de un hueco. La ficha de cada producto incluye su **historial completo** en línea temporal, con el stock que quedaba tras cada movimiento.
 
 **Permisos del catálogo.** Las colecciones las gestiona el administrador. Los contactos los puede crear cualquiera que registre entradas; los editan responsables y administradores y solo el administrador los elimina (y solo si no aparecen en ningún movimiento). Las fichas de producto las editan responsables y administradores; un producto dado de baja conserva su historial pero no admite más entradas.
 
@@ -256,6 +277,12 @@ Las exportaciones incluyen todas las filas del informe, no solo las de la vista 
 31. Como usuario de consulta, abre **Informes > Movimientos** con el mes actual y descárgalo en Excel, CSV y PDF. Comprueba que el Excel suma bien la columna de cantidades y que el CSV se abre con las tildes correctas.
 32. En **Ocupación por ubicación**, cambia la agrupación a pasillo y comprueba que los totales coinciden con el panel.
 
+**Mejoras finales**
+
+33. Imprime la etiqueta de un producto y, en **Salidas > Registrar salida**, escanea con el móvil su **código de barras** (no el QR): debe mostrar dónde está el producto.
+34. En **Productos**, escribe `P01` en el filtro de ubicación: solo deben quedar los productos con stock en ese pasillo.
+35. Abre un enlace con filtros, por ejemplo `/trazabilidad?tipos=salida`, en una ventana sin sesión iniciada: tras entrar, debes llegar a esa misma página con el filtro aplicado.
+
 ## Base de datos en resumen
 
 | Migración | Contenido |
@@ -267,14 +294,25 @@ Las exportaciones incluyen todas las filas del informe, no solo las de la vista 
 | 005 | Salidas, traslados y ajustes |
 | 006 | Vistas de trazabilidad y resumen de lotes |
 | 007 | Indicadores del panel, series para gráficos e informes |
+| 008 | Filtro del catálogo por ubicación |
 
-Las siete se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
+Las ocho se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
+
+## Cómo se ha probado
+
+Además de las pruebas de la base de datos descritas arriba, la aplicación completa se ha probado de extremo a extremo en una réplica local de Supabase. La réplica usaba los componentes oficiales: PostgreSQL con los scripts de inicialización de Supabase y la extensión `supautils`, Supabase Auth (GoTrue) con sus migraciones, PostgREST, la Edge Function ejecutada con Deno y un servidor de correo de pruebas. Sobre ella se ha usado la aplicación compilada en un navegador Chromium real, en tamaño de escritorio y de móvil:
+
+- Acceso con contraseña incorrecta y correcta; invitación de un usuario desde la aplicación, recepción del correo, creación de la contraseña desde el enlace y bloqueo de las secciones no permitidas según el rol.
+- Entrada de un producto nuevo con foto, sugerencia de ubicación en la siguiente entrada, aviso de capacidad, salida localizando el producto por su SKU, traslado y ajuste.
+- Lectura con la cámara del código de barras y del QR de etiquetas generadas por la propia aplicación.
+- Panel, mapa del almacén, filtro del catálogo por ubicación, historial, etiquetas y descarga de informes en Excel, CSV y PDF, revisando el contenido de cada archivo.
+- Desactivación de un usuario y comprobación de que ya no puede entrar.
 
 ## Estructura
 
 ```
 supabase/
-  instalar_todo.sql     las 7 migraciones en un solo archivo para el SQL Editor
+  instalar_todo.sql     todas las migraciones en un solo archivo para el SQL Editor
   migrations/           esquema SQL por fases
   functions/            Edge Functions (gestión de usuarios)
   scripts/              administrador inicial y datos de ejemplo
