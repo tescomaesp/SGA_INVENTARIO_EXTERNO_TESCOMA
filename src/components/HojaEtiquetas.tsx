@@ -9,6 +9,8 @@ export interface Etiqueta {
   arriba: string;
   grande: string;
   abajo: string;
+  /** Si se indica, se imprime además un código de barras Code 128 con este valor. */
+  barras?: string;
 }
 
 type Formato = 'a4' | 'rollo';
@@ -50,6 +52,7 @@ interface Props {
 export function HojaEtiquetas({ titulo, volver, etiquetas, controles }: Props) {
   const [formato, setFormato] = useState<Formato>('a4');
   const [svgs, setSvgs] = useState<Map<string, string> | null>(null);
+  const [barras, setBarras] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!etiquetas) return;
@@ -58,6 +61,21 @@ export function HojaEtiquetas({ titulo, volver, etiquetas, controles }: Props) {
     Promise.all(unicos.map((t) => QRCode.toString(t, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' }))).then(
       (r) => vigente && setSvgs(new Map(unicos.map((t, i) => [t, r[i]]))),
     );
+    // Códigos de barras: se generan como SVG con JsBarcode (solo se carga si hace falta)
+    const valores = [...new Set(etiquetas.map((e) => e.barras).filter((v): v is string => !!v))];
+    if (valores.length) {
+      import('jsbarcode').then(({ default: JsBarcode }) => {
+        const mapa = new Map<string, string>();
+        for (const v of valores) {
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          // Margen lateral (zona de silencio): los lectores lo necesitan para leer de forma fiable
+          JsBarcode(svg, v, { format: 'CODE128', displayValue: false, margin: 0, marginLeft: 12, marginRight: 12, height: 40, width: 2, background: '#ffffff' });
+          svg.setAttribute('preserveAspectRatio', 'none');
+          mapa.set(v, svg.outerHTML);
+        }
+        if (vigente) setBarras(mapa);
+      });
+    }
     return () => {
       vigente = false;
     };
@@ -71,6 +89,8 @@ export function HojaEtiquetas({ titulo, volver, etiquetas, controles }: Props) {
         ${FORMATOS[formato].css}
         .etiqueta { box-sizing: border-box; overflow: hidden; break-inside: avoid; }
         .qr svg { width: 100%; height: 100%; display: block; }
+        .barras { height: 7mm; width: 100%; margin-top: 1.2mm; }
+        .barras svg { width: 100%; height: 100%; display: block; }
         @media screen { .hoja { margin: 0 auto; width: fit-content; gap: 3mm; } .etiqueta { outline: 1px dashed #CBD3DC; background: #fff; } }
         @media print { body { background: #fff !important; padding: 0 !important; } }
       `}</style>
@@ -106,10 +126,11 @@ export function HojaEtiquetas({ titulo, volver, etiquetas, controles }: Props) {
               {etiquetas.map((e) => (
                 <div key={e.clave} className="etiqueta flex items-center gap-[3mm] p-[3mm] text-black">
                   <div className="qr shrink-0" dangerouslySetInnerHTML={{ __html: svgs.get(e.qr) ?? '' }} role="img" aria-label={`Código QR ${e.grande}`} />
-                  <div className="min-w-0 leading-tight">
+                  <div className="min-w-0 flex-1 leading-tight">
                     <p className="line-clamp-2 text-[7pt]">{e.arriba}</p>
                     <p className="grande font-rotulo font-bold leading-none tracking-wide">{e.grande}</p>
                     <p className="mt-[1.5mm] line-clamp-2 break-words text-[6.5pt]">{e.abajo}</p>
+                    {e.barras && <div className="barras" dangerouslySetInnerHTML={{ __html: barras.get(e.barras) ?? '' }} role="img" aria-label={`Código de barras ${e.barras}`} />}
                   </div>
                 </div>
               ))}

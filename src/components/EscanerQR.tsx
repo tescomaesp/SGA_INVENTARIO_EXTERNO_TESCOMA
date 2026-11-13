@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import jsQR from 'jsqr';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
+import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { Dialogo } from './Dialogo';
 import { Aviso } from './ui';
 
@@ -11,71 +12,72 @@ interface Props {
   onCerrar: () => void;
 }
 
-/** Lee códigos QR con la cámara trasera. Requiere HTTPS (o localhost). */
-export function EscanerQR({ abierto, titulo = 'Escanear código QR', instrucciones = 'Apunta la cámara al código QR.', onLeer, onCerrar }: Props) {
+// Códigos QR de las etiquetas y códigos de barras habituales (Code 128 de las etiquetas, EAN de fabricante…)
+const FORMATOS = [
+  BarcodeFormat.QR_CODE,
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+  BarcodeFormat.ITF,
+  BarcodeFormat.DATA_MATRIX,
+];
+
+/** Lee códigos QR y de barras con la cámara trasera. Requiere HTTPS (o localhost). */
+export function EscanerQR({ abierto, titulo = 'Escanear código', instrucciones = 'Apunta la cámara al código QR o de barras.', onLeer, onCerrar }: Props) {
   const video = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
-  // Referencia estable: así la cámara no se reinicia cada vez que el padre se vuelve a dibujar
+  // Referencia estable: la cámara no se reinicia cada vez que el padre se vuelve a dibujar
   const alLeer = useRef(onLeer);
   alLeer.current = onLeer;
 
   useEffect(() => {
     if (!abierto) return;
-    let flujo: MediaStream | null = null;
+    let controles: IScannerControls | null = null;
     let activo = true;
-    let ultimo = 0;
-    const lienzo = document.createElement('canvas');
-    const ctx = lienzo.getContext('2d', { willReadFrequently: true });
     setError(null);
-
-    const analizar = (t: number) => {
-      if (!activo) return;
-      const v = video.current;
-      if (v && ctx && v.readyState >= 2 && t - ultimo > 150) {
-        ultimo = t;
-        // Se analiza una versión reducida: más rápido y suficiente para etiquetas
-        const escala = Math.min(1, 640 / v.videoWidth);
-        lienzo.width = v.videoWidth * escala;
-        lienzo.height = v.videoHeight * escala;
-        ctx.drawImage(v, 0, 0, lienzo.width, lienzo.height);
-        const img = ctx.getImageData(0, 0, lienzo.width, lienzo.height);
-        const r = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-        if (r?.data) {
-          activo = false;
-          navigator.vibrate?.(80);
-          alLeer.current(r.data);
-          return;
-        }
-      }
-      requestAnimationFrame(analizar);
-    };
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('Este navegador no permite usar la cámara. Escribe el código a mano.');
       return;
     }
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
-      .then((s) => {
-        flujo = s;
-        if (!activo) return s.getTracks().forEach((tr) => tr.stop());
-        if (video.current) {
-          video.current.srcObject = s;
-          video.current.play().catch(() => {});
-        }
-        requestAnimationFrame(analizar);
-      })
-      .catch((e: DOMException) => {
-        setError(
-          e.name === 'NotAllowedError'
-            ? 'No hay permiso para usar la cámara. Actívalo en los ajustes del navegador o escribe el código a mano.'
-            : 'No se ha podido abrir la cámara. Escribe el código a mano.',
-        );
-      });
+
+    const pistas = new Map<DecodeHintType, unknown>([
+      [DecodeHintType.POSSIBLE_FORMATS, FORMATOS],
+      [DecodeHintType.TRY_HARDER, true],
+    ]);
+    const lector = new BrowserMultiFormatReader(pistas, { delayBetweenScanAttempts: 120 });
+
+    // Esperar a que el <dialog> haya montado el vídeo
+    const t = setTimeout(() => {
+      if (!video.current) return;
+      lector
+        .decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } }, audio: false }, video.current, (resultado, _err, c) => {
+          if (!activo || !resultado) return;
+          activo = false;
+          c.stop();
+          navigator.vibrate?.(80);
+          alLeer.current(resultado.getText());
+        })
+        .then((c) => {
+          controles = c;
+          if (!activo) c.stop();
+        })
+        .catch((e: DOMException) => {
+          setError(
+            e?.name === 'NotAllowedError'
+              ? 'No hay permiso para usar la cámara. Actívalo en los ajustes del navegador o escribe el código a mano.'
+              : 'No se ha podido abrir la cámara. Escribe el código a mano.',
+          );
+        });
+    }, 50);
 
     return () => {
       activo = false;
-      flujo?.getTracks().forEach((tr) => tr.stop());
+      clearTimeout(t);
+      controles?.stop();
     };
   }, [abierto]);
 
@@ -87,7 +89,7 @@ export function EscanerQR({ abierto, titulo = 'Escanear código QR', instruccion
         <>
           <div className="relative overflow-hidden rounded-md bg-tinta">
             <video ref={video} playsInline muted className="aspect-square w-full object-cover" />
-            <div className="pointer-events-none absolute inset-[18%] rounded-md border-4 border-senal" aria-hidden />
+            <div className="pointer-events-none absolute inset-x-[10%] inset-y-[25%] rounded-md border-4 border-senal" aria-hidden />
           </div>
           <p className="mt-3 text-center text-suave">{instrucciones}</p>
         </>
