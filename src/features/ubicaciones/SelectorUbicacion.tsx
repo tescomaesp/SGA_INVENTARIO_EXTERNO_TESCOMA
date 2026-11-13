@@ -5,7 +5,7 @@ import { useNotificar } from '@/components/Notificaciones';
 import { Placa } from '@/components/Placa';
 import { Boton, Entrada, Selector } from '@/components/ui';
 import { formatearCantidad } from '@/lib/cantidad';
-import { normalizarCodigo, ordenarPorCodigo, PREFIJO_QR_UBICACION } from '@/lib/codigos';
+import { interpretarCodigo, normalizarCodigo, ordenarPorCodigo, PREFIJO_QR_UBICACION } from '@/lib/codigos';
 import { mensajeError } from '@/lib/errores';
 import { supabase } from '@/lib/supabase';
 
@@ -285,8 +285,9 @@ export function SelectorUbicacion({ id, valor, onCambio, cantidad, sugerencias =
         onCerrar={() => setEscaneando(false)}
         onLeer={(t) => {
           setEscaneando(false);
-          if (!t.startsWith(PREFIJO_QR_UBICACION)) return notificar('Ese QR no es de una ubicación del almacén', 'error');
-          elegirPorCodigo(t);
+          const l = interpretarCodigo(t);
+          if (l.tipo !== 'ubicacion') return notificar('Ese código no es la etiqueta de un hueco', 'error');
+          elegirPorCodigo(l.codigo);
         }}
       />
     </div>
