@@ -31,6 +31,7 @@ export interface Producto {
   stock_total: number;
   ubicaciones: number;
   stock_bajo: boolean;
+  codigos_ubicacion: string;
 }
 
 /** Fila de la vista v_stock. */
