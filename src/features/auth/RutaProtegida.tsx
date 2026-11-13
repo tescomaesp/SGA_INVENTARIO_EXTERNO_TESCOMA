@@ -10,7 +10,7 @@ export function RutaProtegida({ children, requiere }: { children: ReactNode; req
   const location = useLocation();
 
   if (cargando) return <Cargando />;
-  if (!sesion || !perfil) return <Navigate to="/acceso" replace state={{ desde: location.pathname }} />;
+  if (!sesion || !perfil) return <Navigate to="/acceso" replace state={{ desde: location.pathname + location.search + location.hash }} />;
 
   if (requiere && !puede(requiere)) {
     return (

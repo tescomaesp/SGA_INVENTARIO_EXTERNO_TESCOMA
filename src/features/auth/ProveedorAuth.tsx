@@ -21,7 +21,9 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
   const [sesion, setSesion] = useState<Session | null>(null);
   const [sesionLista, setSesionLista] = useState(false);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
-  const [perfilListo, setPerfilListo] = useState(false);
+  // Id del usuario para el que ya se ha intentado cargar el perfil. Mientras no coincida con el
+  // de la sesión, se sigue "cargando": así nunca hay un instante con sesión pero sin perfil.
+  const [perfilCargadoDe, setPerfilCargadoDe] = useState<string | null>(null);
   const [motivoSalida, setMotivoSalida] = useState<string | null>(null);
 
   const usuarioId = sesion?.user.id ?? null;
@@ -52,16 +54,15 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     } else {
       setPerfil(data as Perfil);
     }
-    setPerfilListo(true);
+    setPerfilCargadoDe(id);
   }, []);
 
   useEffect(() => {
     if (!usuarioId) {
       setPerfil(null);
-      setPerfilListo(true);
+      setPerfilCargadoDe(null);
       return;
     }
-    setPerfilListo(false);
     cargarPerfil(usuarioId);
   }, [usuarioId, cargarPerfil]);
 
@@ -79,7 +80,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     () => ({
       sesion,
       perfil,
-      cargando: !sesionLista || (!!usuarioId && !perfilListo),
+      cargando: !sesionLista || (!!usuarioId && perfilCargadoDe !== usuarioId),
       motivoSalida,
       puede: (accion) => puedeRol(perfil?.rol_id, accion),
       recargarPerfil: async () => {
@@ -87,7 +88,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
       },
       cerrarSesion,
     }),
-    [sesion, perfil, sesionLista, usuarioId, perfilListo, motivoSalida, cargarPerfil, cerrarSesion],
+    [sesion, perfil, sesionLista, usuarioId, perfilCargadoDe, motivoSalida, cargarPerfil, cerrarSesion],
   );
 
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;

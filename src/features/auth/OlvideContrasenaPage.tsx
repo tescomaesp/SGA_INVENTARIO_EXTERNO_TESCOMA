@@ -16,7 +16,7 @@ export function OlvideContrasenaPage() {
     setError(null);
     setEnviando(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/crear-contrasena`,
+      redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}crear-contrasena`,
     });
     setEnviando(false);
     // Por seguridad no se revela si el email existe: solo se muestran errores técnicos.
