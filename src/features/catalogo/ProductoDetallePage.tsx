@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, ArrowLeftRight, Mail, PackageMinus, PackagePlus, Pencil, Phone, Printer, SlidersHorizontal } from 'lucide-react';
 import { Dialogo } from '@/components/Dialogo';
-import { FilaMovimiento } from '@/components/FilaMovimiento';
 import { Miniatura } from '@/components/Miniatura';
 import { useNotificar } from '@/components/Notificaciones';
 import { Placa } from '@/components/Placa';
@@ -11,11 +10,14 @@ import { useAuth } from '@/features/auth/ProveedorAuth';
 import { formatearCantidad } from '@/lib/cantidad';
 import { mensajeError } from '@/lib/errores';
 import { formatearFecha } from '@/lib/formato';
-import type { Contacto, FilaStock, Lote, Movimiento, Producto } from '@/types/catalogo';
+import type { Contacto, FilaStock, Lote, MovimientoTraza, Producto } from '@/types/catalogo';
 import { catalogoApi } from './api';
 import { FormProducto } from './FormProducto';
 import { trazabilidadApi } from '@/features/trazabilidad/api';
+import { LineaTemporal } from '@/features/trazabilidad/LineaTemporal';
 import { DialogoAjuste } from '@/features/movimientos/DialogoAjuste';
+
+const POR_PAGINA_HISTORIAL = 20;
 
 export function ProductoDetallePage() {
   const { id = '' } = useParams();
@@ -26,7 +28,9 @@ export function ProductoDetallePage() {
   const [producto, setProducto] = useState<Producto | null | undefined>(undefined);
   const [contacto, setContacto] = useState<Contacto | null>(null);
   const [stock, setStock] = useState<FilaStock[]>([]);
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  const [historial, setHistorial] = useState<MovimientoTraza[]>([]);
+  const [totalHistorial, setTotalHistorial] = useState(0);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState(false);
@@ -37,13 +41,14 @@ export function ProductoDetallePage() {
       const [p, s, m, l] = await Promise.all([
         catalogoApi.producto(id),
         catalogoApi.stock({ producto_id: id }),
-        catalogoApi.movimientos({ producto_id: id }, 0, 10),
+        trazabilidadApi.movimientos({ producto: id }, 0, POR_PAGINA_HISTORIAL),
         trazabilidadApi.lotesDeProducto(id),
       ]);
       setProducto(p);
       setLotes(l);
       setStock(s);
-      setMovimientos(m);
+      setHistorial(m.filas);
+      setTotalHistorial(m.total);
       setContacto(p?.contacto_id ? await catalogoApi.contacto(p.contacto_id) : null);
     } catch (e) {
       setError(await mensajeError(e));
@@ -194,15 +199,39 @@ export function ProductoDetallePage() {
 
       <section>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-2xl">Últimos movimientos</h2>
-          <Link to={`/trazabilidad?producto=${producto.id}`} className="font-semibold text-acero hover:underline">Ver historial completo</Link>
+          <h2 className="text-2xl">Historial</h2>
+          {totalHistorial > 0 && (
+            <Link to={`/trazabilidad?producto=${producto.id}`} className="font-semibold text-acero hover:underline">Filtrar por fechas, lote o usuario</Link>
+          )}
         </div>
-        {movimientos.length === 0 ? (
+        {historial.length === 0 ? (
           <p className="text-suave">Sin movimientos.</p>
         ) : (
-          <ul className="rounded-md border border-linea bg-white">
-            {movimientos.map((m) => <FilaMovimiento key={m.id} m={m} sinProducto />)}
-          </ul>
+          <>
+            <p className="mb-3 text-sm text-suave">
+              {totalHistorial.toLocaleString('es-ES')} {totalHistorial === 1 ? 'movimiento' : 'movimientos'}, del más reciente al más antiguo. «Queda» es el stock total tras cada uno.
+            </p>
+            <LineaTemporal movimientos={historial} sinProducto saldo="producto" />
+            {historial.length < totalHistorial && (
+              <div className="mt-5 text-center">
+                <Boton
+                  variante="secundario"
+                  cargando={cargandoHistorial}
+                  onClick={async () => {
+                    setCargandoHistorial(true);
+                    try {
+                      const r = await trazabilidadApi.movimientos({ producto: producto.id }, historial.length, POR_PAGINA_HISTORIAL);
+                      setHistorial((h) => [...h, ...r.filas]);
+                    } finally {
+                      setCargandoHistorial(false);
+                    }
+                  }}
+                >
+                  Ver movimientos más antiguos
+                </Boton>
+              </div>
+            )}
+          </>
         )}
       </section>
 

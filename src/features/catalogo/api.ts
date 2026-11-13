@@ -20,6 +20,8 @@ export interface FiltroProductos {
   texto?: string;
   coleccionId?: string;
   contactoId?: string;
+  /** Parte de un código de ubicación: "P01", "P01-E03", "ALM1-P02-E01-N2-H04"… */
+  ubicacion?: string;
   soloStockBajo?: boolean;
   incluirBajas?: boolean;
 }
@@ -71,6 +73,8 @@ export const catalogoApi = {
     if (t) q = q.or(`nombre.ilike.*${t}*,sku.ilike.*${t}*`);
     if (filtro.coleccionId) q = q.eq('coleccion_id', filtro.coleccionId);
     if (filtro.contactoId) q = q.eq('contacto_id', filtro.contactoId);
+    const u = textoBusqueda(filtro.ubicacion ?? '').toUpperCase();
+    if (u) q = q.ilike('codigos_ubicacion', `%${u}%`);
     if (filtro.soloStockBajo) q = q.eq('stock_bajo', true);
     if (!filtro.incluirBajas) q = q.eq('activo', true);
     const r = await q;

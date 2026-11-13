@@ -10,7 +10,7 @@ import { catalogoApi } from './api';
 
 /**
  * Etiquetas de producto: ?producto=<id> (con número de copias) o ?coleccion=<id> (una por producto).
- * El QR contiene PRD:<SKU> y se lee en salidas y traslados.
+ * El QR contiene PRD:<SKU> y el código de barras (Code 128) el SKU; ambos se leen en salidas y traslados.
  */
 export function EtiquetasProductoPage() {
   const [params] = useSearchParams();
@@ -52,6 +52,7 @@ export function EtiquetasProductoPage() {
         arriba: p.coleccion_nombre,
         grande: p.sku,
         abajo: p.nombre,
+        barras: p.sku,
       })),
     );
   }, [productos, productoId, nCopias]);

@@ -10,8 +10,9 @@ import { catalogoApi, TAMANO_PAGINA, type FiltroProductos } from './api';
 
 export function ListaProductos() {
   const [params] = useSearchParams();
-  const [filtro, setFiltro] = useState<FiltroProductos>(() => ({ soloStockBajo: params.get('stock_bajo') === '1' }));
+  const [filtro, setFiltro] = useState<FiltroProductos>(() => ({ soloStockBajo: params.get('stock_bajo') === '1', ubicacion: params.get('ubicacion') ?? undefined }));
   const [texto, setTexto] = useState('');
+  const [ubicacion, setUbicacion] = useState(params.get('ubicacion') ?? '');
   const [pagina, setPagina] = useState(0);
   const [datos, setDatos] = useState<{ filas: Producto[]; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,14 +24,14 @@ export function ListaProductos() {
     catalogoApi.contactos('', 500).then(setContactos).catch(() => {});
   }, []);
 
-  // La búsqueda por texto espera a que se deje de escribir
+  // Las búsquedas de texto esperan a que se deje de escribir
   useEffect(() => {
     const t = setTimeout(() => {
-      setFiltro((f) => ({ ...f, texto }));
+      setFiltro((f) => (f.texto === texto && (f.ubicacion ?? '') === ubicacion ? f : { ...f, texto, ubicacion }));
       setPagina(0);
     }, 300);
     return () => clearTimeout(t);
-  }, [texto]);
+  }, [texto, ubicacion]);
 
   useEffect(() => {
     let vigente = true;
@@ -51,7 +52,7 @@ export function ListaProductos() {
 
   return (
     <>
-      <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem_auto] lg:items-center">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_11rem_11rem_11rem_auto] xl:items-center">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-suave" aria-hidden />
           <Entrada type="search" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar por nombre o SKU" className="pl-9" aria-label="Buscar productos" />
@@ -64,6 +65,13 @@ export function ListaProductos() {
           <option value="">Todos los contactos</option>
           {contactos.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </Selector>
+        <Entrada
+          value={ubicacion}
+          onChange={(e) => setUbicacion(e.target.value)}
+          placeholder="Ubicación: P01, P01-E03…"
+          aria-label="Filtrar por ubicación"
+          className="uppercase placeholder:normal-case"
+        />
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2">
             <input type="checkbox" className="h-5 w-5 accent-acero" checked={!!filtro.soloStockBajo} onChange={(e) => cambiar({ soloStockBajo: e.target.checked })} />
@@ -82,7 +90,7 @@ export function ListaProductos() {
         <Cargando />
       ) : datos.filas.length === 0 ? (
         <div className="rounded-md border border-dashed border-linea bg-white px-6 py-12 text-center text-suave">
-          {filtro.texto || filtro.coleccionId || filtro.contactoId || filtro.soloStockBajo
+          {filtro.texto || filtro.coleccionId || filtro.contactoId || filtro.ubicacion || filtro.soloStockBajo
             ? 'Ningún producto coincide con los filtros.'
             : 'Todavía no hay productos. Se crean al registrar la primera entrada de cada uno.'}
         </div>
