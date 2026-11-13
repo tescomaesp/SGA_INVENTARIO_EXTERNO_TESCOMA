@@ -1,0 +1,68 @@
+# Compila la aplicación y la publica en GitHub Pages cada vez que cambia la rama main.
+#
+# Configuración necesaria en GitHub (Settings del repositorio):
+#   · Pages > Build and deployment > Source: «GitHub Actions»
+#   · Secrets and variables > Actions > Variables:
+#       VITE_SUPABASE_URL     = https://<referencia>.supabase.co
+#       VITE_NOMBRE_EMPRESA   = nombre que aparece en la pantalla de acceso (opcional)
+#   · Secrets and variables > Actions > Secrets:
+#       VITE_SUPABASE_ANON_KEY = clave pública "anon" (Supabase > Project Settings > API Keys)
+name: Publicar en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar la configuración
+        env:
+          URL: ${{ vars.VITE_SUPABASE_URL }}
+          CLAVE: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ]; then echo "::error::Falta la variable VITE_SUPABASE_URL (Settings > Secrets and variables > Actions > Variables)"; exit 1; fi
+          if [ -z "$CLAVE" ]; then echo "::error::Falta el secreto VITE_SUPABASE_ANON_KEY (Settings > Secrets and variables > Actions > Secrets)"; exit 1; fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Compilar
+        run: npm run build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_NOMBRE_EMPRESA: ${{ vars.VITE_NOMBRE_EMPRESA }}
+
+      # GitHub Pages no conoce las rutas de la aplicación (/productos, /crear-contrasena…):
+      # sirve 404.html para cualquier dirección desconocida, así que es una copia de index.html.
+      - name: Rutas de la aplicación
+        run: cp dist/index.html dist/404.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: despliegue
+        uses: actions/deploy-pages@v4
