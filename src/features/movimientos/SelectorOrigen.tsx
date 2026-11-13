@@ -9,7 +9,7 @@ import { Boton, Cargando, Entrada } from '@/components/ui';
 import { catalogoApi } from '@/features/catalogo/api';
 import { ubicacionesApi } from '@/features/ubicaciones/api';
 import { formatearCantidad } from '@/lib/cantidad';
-import { normalizarCodigo, PREFIJO_QR_PRODUCTO, PREFIJO_QR_UBICACION } from '@/lib/codigos';
+import { interpretarCodigo, normalizarCodigo, PREFIJO_QR_UBICACION } from '@/lib/codigos';
 import { mensajeError } from '@/lib/errores';
 import { formatearFecha } from '@/lib/formato';
 import type { FilaStock, Producto } from '@/types/catalogo';
@@ -69,6 +69,15 @@ export function SelectorOrigen({ valor, onCambio, productoInicial, huecoInicial 
 
   const porHueco = useCallback(
     async (codigo: string) => {
+      // Una pistola lectora "escribe" el código: si es de producto, se busca el producto
+      const lectura = interpretarCodigo(codigo);
+      if (lectura.tipo === 'producto') {
+        const p = await catalogoApi.productoPorSku(lectura.sku);
+        if (p) {
+          setCodigoHueco('');
+          return porProducto(p);
+        }
+      }
       const c = normalizarCodigo(codigo.replace(PREFIJO_QR_UBICACION, ''));
       if (!c) return;
       const h = await ubicacionesApi.huecoPorCodigo(c).catch(() => null);
@@ -76,7 +85,7 @@ export function SelectorOrigen({ valor, onCambio, productoInicial, huecoInicial 
       setCodigoHueco('');
       mostrar({ tipo: 'hueco', texto: h.codigo_completo }, () => catalogoApi.stock({ hueco_id: h.id }));
     },
-    [mostrar, notificar],
+    [mostrar, notificar, porProducto],
   );
 
   // Precarga desde otras pantallas
@@ -88,14 +97,15 @@ export function SelectorOrigen({ valor, onCambio, productoInicial, huecoInicial 
 
   async function leerQr(t: string) {
     setEscaneando(false);
-    if (t.startsWith(PREFIJO_QR_PRODUCTO)) {
-      const p = await catalogoApi.productoPorSku(t.slice(PREFIJO_QR_PRODUCTO.length));
-      if (!p) return notificar('No se encuentra el producto de esa etiqueta', 'error');
+    const l = interpretarCodigo(t);
+    if (l.tipo === 'producto') {
+      const p = await catalogoApi.productoPorSku(l.sku);
+      if (!p) return notificar(`No existe ningún producto con el código ${l.sku}`, 'error');
       porProducto(p);
-    } else if (t.startsWith(PREFIJO_QR_UBICACION)) {
-      porHueco(t);
+    } else if (l.tipo === 'ubicacion') {
+      porHueco(l.codigo);
     } else {
-      notificar('Ese QR no es una etiqueta del almacén', 'error');
+      notificar('Ese código no es una etiqueta del almacén', 'error');
     }
   }
 
@@ -158,7 +168,7 @@ export function SelectorOrigen({ valor, onCambio, productoInicial, huecoInicial 
               porHueco(codigoHueco);
             }
           }}
-          placeholder="o escribe el código de un hueco para ver qué contiene"
+          placeholder="o escribe el código de un hueco o el SKU"
           aria-label="Código de hueco"
           className="uppercase placeholder:normal-case"
         />

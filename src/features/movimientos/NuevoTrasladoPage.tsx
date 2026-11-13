@@ -20,7 +20,7 @@ export function NuevoTrasladoPage() {
   const [destino, setDestino] = useState<HuecoElegido | null>(null);
   const [cantidadTexto, setCantidadTexto] = useState('');
   const [notas, setNotas] = useState('');
-  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [intentado, setIntentado] = useState(false);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [hecho, setHecho] = useState<{ fila: FilaStock; destino: string; cantidad: number } | null>(null);
@@ -29,8 +29,7 @@ export function NuevoTrasladoPage() {
   const cantidad = leerCantidad(cantidadTexto);
   const mismoHueco = !!origen && !!destino && origen.hueco_id === destino.id;
 
-  async function enviar(e: FormEvent) {
-    e.preventDefault();
+  const validar = (): Record<string, string> => {
     const err: Record<string, string> = {};
     if (!origen) err.origen = 'Elige qué mercancía se mueve y de dónde.';
     if (cantidad === null || cantidad <= 0) err.cantidad = 'Indica una cantidad mayor que cero.';
@@ -38,7 +37,14 @@ export function NuevoTrasladoPage() {
     if (!destino) err.destino = 'Elige el hueco de destino.';
     else if (mismoHueco) err.destino = 'El destino debe ser distinto del origen.';
     else if (destino.capacidad !== null && cantidad && cantidad > destino.capacidad - destino.unidades) err.destino = 'La cantidad no cabe en el hueco de destino.';
-    setErrores(err);
+    return err;
+  };
+  const errores = intentado ? validar() : {};
+
+  async function enviar(e: FormEvent) {
+    e.preventDefault();
+    const err = validar();
+    setIntentado(true);
     setErrorGeneral(null);
     if (Object.keys(err).length) return;
 
@@ -64,6 +70,7 @@ export function NuevoTrasladoPage() {
               icono={<ArrowLeftRight className="h-4 w-4" />}
               onClick={() => {
                 setHecho(null);
+                setIntentado(false);
                 setOrigen(null);
                 setDestino(null);
                 setCantidadTexto('');
@@ -97,7 +104,7 @@ export function NuevoTrasladoPage() {
       </Link>
       <h1 className="mb-6 text-4xl">Trasladar mercancía</h1>
 
-      <form onSubmit={enviar} noValidate className="space-y-5">
+      <form onSubmit={enviar} noValidate className="space-y-5 pb-4">
         <SeccionFormulario numero={1} titulo="Qué se mueve y desde dónde">
           <SelectorOrigen key={clave} valor={origen} onCambio={setOrigen} productoInicial={clave === 0 ? params.get('producto') : null} huecoInicial={clave === 0 ? params.get('hueco') : null} />
           {errores.origen && <p className="text-sm text-peligro" role="alert">{errores.origen}</p>}

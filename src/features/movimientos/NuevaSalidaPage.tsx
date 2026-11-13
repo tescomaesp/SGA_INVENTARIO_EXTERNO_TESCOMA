@@ -22,7 +22,7 @@ export function NuevaSalidaPage() {
   const [destino, setDestino] = useState('');
   const [documento, setDocumento] = useState('');
   const [notas, setNotas] = useState('');
-  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [intentado, setIntentado] = useState(false);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [hecha, setHecha] = useState<{ fila: FilaStock; cantidad: number; restante: number } | null>(null);
@@ -30,15 +30,21 @@ export function NuevaSalidaPage() {
 
   const cantidad = leerCantidad(cantidadTexto);
 
-  async function enviar(e: FormEvent) {
-    e.preventDefault();
+  const validar = (): Record<string, string> => {
     const err: Record<string, string> = {};
     if (!origen) err.origen = 'Elige qué mercancía sale y de dónde.';
     if (cantidad === null || cantidad <= 0) err.cantidad = 'Indica una cantidad mayor que cero.';
     else if (origen && cantidad > origen.cantidad) err.cantidad = `Solo hay ${formatearCantidad(origen.cantidad)} disponibles.`;
     if (!motivo) err.motivo = 'Elige el motivo.';
     if (motivo === 'otro' && !notas.trim()) err.notas = 'Explica qué ha pasado.';
-    setErrores(err);
+    return err;
+  };
+  const errores = intentado ? validar() : {};
+
+  async function enviar(e: FormEvent) {
+    e.preventDefault();
+    const err = validar();
+    setIntentado(true);
     setErrorGeneral(null);
     if (Object.keys(err).length) return;
 
@@ -74,6 +80,7 @@ export function NuevaSalidaPage() {
               onClick={() => {
                 // Se mantienen motivo, destino y documento: suelen repetirse en un mismo pedido
                 setHecha(null);
+                setIntentado(false);
                 setOrigen(null);
                 setCantidadTexto('');
                 setNotas('');
@@ -105,7 +112,7 @@ export function NuevaSalidaPage() {
       </Link>
       <h1 className="mb-6 text-4xl">Registrar salida</h1>
 
-      <form onSubmit={enviar} noValidate className="space-y-5">
+      <form onSubmit={enviar} noValidate className="space-y-5 pb-4">
         <SeccionFormulario numero={1} titulo="Qué sale y de dónde">
           <SelectorOrigen key={clave} valor={origen} onCambio={setOrigen} productoInicial={clave === 0 ? params.get('producto') : null} huecoInicial={clave === 0 ? params.get('hueco') : null} />
           {errores.origen && <p className="text-sm text-peligro" role="alert">{errores.origen}</p>}
