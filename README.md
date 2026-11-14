@@ -32,7 +32,7 @@ Crea un proyecto nuevo y, en **Authentication**, configura lo siguiente:
 
 ### 2. Crear la base de datos
 
-**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene todas las migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 8 filas, del `001_roles_perfiles.sql` al `008_mejoras.sql`.
+**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene todas las migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 9 filas, del `001_roles_perfiles.sql` al `009_eliminaciones_registro.sql`.
 
 **Actualizar una instalación anterior:** ejecuta el `instalar_todo.sql` nuevo igual que la primera vez. Como todas las migraciones se pueden repetir, aplica solo lo que falta y conserva todos los datos.
 
@@ -45,6 +45,8 @@ supabase db push
 ```
 
 También puedes ejecutar los archivos de `supabase/migrations/` uno a uno en el SQL Editor, siempre en orden.
+
+**Importante: publicar el esquema `public` en la API.** En los proyectos de Supabase recientes, la API de datos puede venir sin el esquema `public` publicado. Si es así, se podrá iniciar sesión, pero la aplicación no podrá leer ningún dato y se quedará en la pantalla de acceso. Compruébalo en **Integrations > Data API > Settings > Exposed schemas**: tiene que aparecer **`public`** marcado (junto a `graphql_public`). Guarda los cambios si tienes que marcarlo. No hace falta tocar «Exposed tables» ni «Exposed functions»: las migraciones ya conceden los permisos tabla por tabla.
 
 Todas las migraciones se pueden **ejecutar más de una vez** sin error y sin duplicar nada: si algo falla a mitad, se corrige la causa y se vuelve a ejecutar el mismo archivo. Además, cada una comprueba que la anterior esté aplicada; si no lo está, lo dice con un mensaje claro en lugar de un error técnico. Para ver cuáles están aplicadas:
 
@@ -60,6 +62,7 @@ select * from public.sga_migraciones order by numero;
 | `syntax error at or near "```"` | Se ha copiado desde el listado `.md` o una web, incluyendo las líneas de marcado. Copia desde el archivo `.sql` original, o en GitHub desde el botón **Raw**. |
 | `syntax error` al principio de una línea con un número | Se han copiado los números de línea de la vista de código de GitHub. Usa el botón **Raw** o **Copy raw file**. |
 | `relation "…" already exists` | Es la versión antigua de las migraciones. Usa las actuales de este repositorio, que se pueden repetir. |
+| La aplicación se queda «pensando» al entrar, o avisa de que no se ha podido cargar tu perfil | La API de datos no publica el esquema `public`. Márcalo en **Integrations > Data API > Settings > Exposed schemas** (ver arriba). |
 | `must be owner of table objects` | El proyecto no es de Supabase Cloud o es una instalación propia sin la extensión `supautils`. En Supabase Cloud no ocurre. |
 
 ### 3. Desplegar la función de gestión de usuarios
@@ -197,7 +200,9 @@ Es la primera pantalla al entrar. De un vistazo muestra:
 - **Accesos directos** a registrar una entrada, una salida o un traslado (para quien tenga permiso).
 - **Indicadores:** referencias activas, unidades en stock, unidades que han entrado y salido hoy y en la semana (desde el lunes), y ocupación del almacén. La ocupación es un porcentaje si los huecos tienen capacidad definida; si no, indica cuántos huecos tienen mercancía.
 - **Gráfico de entradas y salidas** de los últimos 14 días, 12 semanas o 12 meses.
-- **Alertas:** productos por debajo de su stock mínimo, y lotes con stock caducados o que caducan en los próximos 30 días.
+- **Ajustes negativos:** los productos que más unidades han perdido en ajustes de inventario (recuentos, roturas, errores) en los últimos 30 días, con enlace a esos ajustes en Trazabilidad. No cuenta el stock retirado al eliminar productos.
+- **Caducidades:** lotes con stock caducados o que caducan en los próximos 30 días.
+- El aviso de **stock bajo** sigue disponible en el filtro «Stock bajo» del catálogo.
 - **Ocupación por pasillo**, con una barra por pasillo que se pone roja a partir del 90 %.
 - **Últimos movimientos.**
 
@@ -224,6 +229,32 @@ Cada informe muestra una vista previa de las 100 primeras filas, con totales cal
 Las exportaciones incluyen todas las filas del informe, no solo las de la vista previa, hasta un máximo de 100.000. Para listados muy largos, Excel es el formato más cómodo.
 
 **Catálogo.** El listado de productos se filtra por nombre o SKU, colección, persona de contacto, stock bajo y **ubicación**. En la ubicación vale cualquier parte de un código: `P01` (todo un pasillo), `P01-E03` (una estantería) o el código completo de un hueco. La ficha de cada producto incluye su **historial completo** en línea temporal, con el stock que quedaba tras cada movimiento.
+
+## Eliminar elementos y registro de modificaciones
+
+Los **administradores** pueden eliminar almacenes, pasillos, estanterías, niveles, huecos, productos, colecciones y contactos:
+
+- **De uno en uno:** desde el menú de cada elemento o desde su ficha.
+- **En bloque:** en **Productos**, **Colecciones** y **Contactos**, cada fila tiene una casilla, y otra casilla marca toda la página. En **Ubicaciones**, el botón **Seleccionar para eliminar** activa un modo en el que se marcan pasillos o estanterías enteras con su casilla, o huecos sueltos pulsándolos. Una barra inferior indica cuánto hay seleccionado y permite eliminarlo todo de una vez.
+
+Antes de eliminar se muestra la lista de lo que se va a eliminar y se puede escribir un motivo. Si alguno de los elementos no se puede eliminar, los demás se eliminan igualmente y se explica el motivo de cada uno.
+
+Qué significa eliminar:
+
+- El elemento **desaparece de toda la aplicación**: catálogo, mapa, buscadores, selectores e informes de stock. Su código o nombre se puede volver a usar.
+- **El historial no se pierde.** Los movimientos son inmutables, así que Trazabilidad y los informes de movimientos siguen mostrando lo eliminado, marcado como «(eliminado)».
+- **Productos con stock:** el stock se retira con un ajuste de motivo «Retirada al eliminar el producto», para que el stock siga cuadrando con el historial.
+- **Ubicaciones con mercancía:** no se eliminan. La aplicación indica qué hay y dónde, para vaciarlas antes con una salida o un traslado.
+- **Colecciones con productos:** no se eliminan hasta que no les quede ninguno.
+
+El apartado **Modificaciones** (solo administradores) recoge cada eliminación y cada edición de ubicaciones, productos, colecciones y contactos, con fecha, usuario, motivo y detalle:
+
+- en las ediciones, cada campo con su valor anterior y el nuevo;
+- en las eliminaciones, los huecos que incluía y el stock retirado.
+
+Se puede filtrar y exportar a Excel. El registro no se puede modificar ni borrar, ni siquiera desde Supabase.
+
+**Productos nuevos: notas obligatorias.** Al registrar la entrada de un producto nuevo, el campo **Notas** del apartado 3 es obligatorio. Sirve para dejar constancia del motivo de la entrada y de quién se recibe. La base de datos también lo exige.
 
 **Permisos del catálogo.** Las colecciones las gestiona el administrador. Los contactos los puede crear cualquiera que registre entradas; los editan responsables y administradores y solo el administrador los elimina (y solo si no aparecen en ningún movimiento). Las fichas de producto las editan responsables y administradores; un producto dado de baja conserva su historial pero no admite más entradas.
 
@@ -283,6 +314,14 @@ Las exportaciones incluyen todas las filas del informe, no solo las de la vista 
 34. En **Productos**, escribe `P01` en el filtro de ubicación: solo deben quedar los productos con stock en ese pasillo.
 35. Abre un enlace con filtros, por ejemplo `/trazabilidad?tipos=salida`, en una ventana sin sesión iniciada: tras entrar, debes llegar a esa misma página con el filtro aplicado.
 
+**Eliminación y modificaciones**
+
+36. En **Ubicaciones**, pulsa **Seleccionar para eliminar**, marca una estantería vacía y un hueco con mercancía y pulsa **Eliminar**. La estantería debe eliminarse y el hueco quedar bloqueado, con el motivo («Tiene mercancía…»).
+37. En **Productos**, marca dos productos (uno con stock) y elimínalos. En su lugar, en **Trazabilidad**, el que tenía stock debe mostrar un ajuste «Retirada al eliminar el producto» y su nombre con «(eliminado)».
+38. Abre **Modificaciones**: deben aparecer las eliminaciones con tu nombre, el motivo, los huecos incluidos y el stock retirado. Edita el nombre de un pasillo y comprueba que aparece la edición con el valor anterior y el nuevo.
+39. Entra como operario: no deben aparecer casillas, el botón **Seleccionar para eliminar** ni el menú **Modificaciones**.
+40. Registra la entrada de un producto nuevo sin notas: el formulario no debe dejar guardarla.
+
 ## Base de datos en resumen
 
 | Migración | Contenido |
@@ -295,8 +334,9 @@ Las exportaciones incluyen todas las filas del informe, no solo las de la vista 
 | 006 | Vistas de trazabilidad y resumen de lotes |
 | 007 | Indicadores del panel, series para gráficos e informes |
 | 008 | Filtro del catálogo por ubicación |
+| 009 | Eliminación de elementos, registro de modificaciones y ajustes negativos del panel |
 
-Las ocho se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
+Las nueve se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
 
 ## Cómo se ha probado
 
