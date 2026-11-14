@@ -21,7 +21,7 @@ alter table public.movimientos drop constraint if exists movimientos_motivo_vali
 alter table public.movimientos add constraint movimientos_motivo_valido check (
   motivo is null
   or (tipo = 'salida' and motivo in ('envio', 'devolucion', 'merma', 'uso_interno', 'otro'))
-  or (tipo = 'ajuste' and motivo in ('recuento', 'rotura', 'error_registro', 'otro'))
+  or (tipo = 'ajuste' and motivo in ('recuento', 'rotura', 'error_registro', 'otro', 'eliminacion'))
 );
 
 -- Stock disponible de un producto/lote en un hueco, bloqueando la fila hasta el final de la operación
