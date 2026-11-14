@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layers, Pencil, Plus, Printer, Search, Trash2, Warehouse } from 'lucide-react';
 import { Dialogo } from '@/components/Dialogo';
-import { DialogoConfirmar } from '@/components/DialogoConfirmar';
+import { BarraSeleccion } from '@/components/BarraSeleccion';
+import { Casilla } from '@/components/Casilla';
+import { DialogoEliminar } from '@/components/DialogoEliminar';
+import { NOMBRE_TIPO, type ElementoAEliminar } from '@/features/modificaciones/api';
 import { MenuAcciones, type OpcionMenu } from '@/components/MenuAcciones';
 import { useNotificar } from '@/components/Notificaciones';
 import { Placa } from '@/components/Placa';
@@ -28,12 +31,6 @@ type Modal =
   | { tipo: 'hueco'; hueco: Hueco; codigo: string }
   | { tipo: 'hueco-editar'; hueco: Hueco; codigo: string };
 
-interface Borrado {
-  titulo: string;
-  texto: string;
-  accion: () => Promise<void>;
-}
-
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`;
 
 export function UbicacionesPage() {
@@ -49,7 +46,12 @@ export function UbicacionesPage() {
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
   const [modal, setModal] = useState<Modal | null>(null);
-  const [borrado, setBorrado] = useState<Borrado | null>(null);
+  const puedeEliminar = puede('eliminar');
+  const [aEliminar, setAEliminar] = useState<ElementoAEliminar[] | null>(null);
+  // Modo selección: se marcan pasillos, estanterías o huecos y se eliminan de una vez.
+  // Clave "tipo:id"; «padres» permite no enviar lo que ya incluye un elemento superior marcado.
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccion, setSeleccion] = useState<Map<string, ElementoAEliminar & { padres: string[] }>>(new Map());
 
   const almacenId = params.get('almacen') ?? almacenes?.[0]?.id ?? null;
   const almacen = almacenes?.find((a) => a.id === almacenId) ?? null;
@@ -142,6 +144,24 @@ export function UbicacionesPage() {
 
   const etiquetas = (filtro: Record<string, string>) => navigate(`/ubicaciones/etiquetas?${new URLSearchParams(filtro)}`);
 
+  // --- Selección múltiple ------------------------------------------------
+  const clave = (tipo: string, id: string) => `${tipo}:${id}`;
+  const alternarSeleccion = (el: ElementoAEliminar & { padres: string[] }, marcar: boolean) =>
+    setSeleccion((s) => {
+      const n = new Map(s);
+      const k = clave(el.tipo, el.id);
+      if (marcar) n.set(k, el);
+      else n.delete(k);
+      return n;
+    });
+  const marcado = (tipo: string, id: string, padres: string[] = []) => seleccion.has(clave(tipo, id)) || padres.some((k) => seleccion.has(k));
+  const resumenSeleccion = () => {
+    const efectivos = [...seleccion.values()].filter((x) => !x.padres.some((k) => seleccion.has(k)));
+    const n = new Map<string, number>();
+    for (const x of efectivos) n.set(x.tipo, (n.get(x.tipo) ?? 0) + 1);
+    return [...n].map(([t, c]) => `${c} ${NOMBRE_TIPO[t as ElementoAEliminar['tipo']][c === 1 ? 0 : 1]}`).join(', ');
+  };
+
   // --- Opciones de menú ---------------------------------------------------
   const opcionesPasillo = (p: Pasillo): OpcionMenu[] => {
     const huecos = p.estanterias.reduce((s, e) => s + e.niveles.reduce((t, n) => t + n.huecos.length, 0), 0);
@@ -156,11 +176,7 @@ export function UbicacionesPage() {
               icono: <Trash2 className="h-4 w-4" />,
               peligro: true,
               onClick: () =>
-                setBorrado({
-                  titulo: `Eliminar el pasillo ${p.codigo}`,
-                  texto: `Se eliminarán también ${plural(p.estanterias.length, 'estantería', 'estanterías')} y ${plural(huecos, 'hueco', 'huecos')}.`,
-                  accion: hacer(`Pasillo ${p.codigo} eliminado`, () => ubicacionesApi.borrar('pasillos', p.id)),
-                }),
+                setAEliminar([{ tipo: 'pasillo', id: p.id, descripcion: `${almacen?.codigo}-${p.codigo}`, aviso: `Incluye ${plural(p.estanterias.length, 'estantería', 'estanterías')} y ${plural(huecos, 'hueco', 'huecos')}.` }]),
             },
           ]
         : []),
@@ -182,11 +198,7 @@ export function UbicacionesPage() {
                     icono: <Trash2 className="h-4 w-4" />,
                     peligro: true,
                     onClick: () =>
-                      setBorrado({
-                        titulo: `Eliminar el nivel ${e.niveles[0].codigo} de ${p.codigo}-${e.codigo}`,
-                        texto: `Se eliminarán sus ${plural(e.niveles[0].huecos.length, 'hueco', 'huecos')}.`,
-                        accion: hacer(`Nivel ${e.niveles[0].codigo} eliminado`, () => ubicacionesApi.borrar('niveles', e.niveles[0].id)),
-                      }),
+                      setAEliminar([{ tipo: 'nivel', id: e.niveles[0].id, descripcion: `${almacen?.codigo}-${p.codigo}-${e.codigo}-${e.niveles[0].codigo}`, aviso: `Incluye ${plural(e.niveles[0].huecos.length, 'hueco', 'huecos')}.` }]),
                   },
                 ]
               : []),
@@ -195,11 +207,7 @@ export function UbicacionesPage() {
               icono: <Trash2 className="h-4 w-4" />,
               peligro: true,
               onClick: () =>
-                setBorrado({
-                  titulo: `Eliminar la estantería ${p.codigo}-${e.codigo}`,
-                  texto: `Se eliminarán también ${plural(e.niveles.length, 'nivel', 'niveles')} y ${plural(huecos, 'hueco', 'huecos')}.`,
-                  accion: hacer(`Estantería ${e.codigo} eliminada`, () => ubicacionesApi.borrar('estanterias', e.id)),
-                }),
+                setAEliminar([{ tipo: 'estanteria', id: e.id, descripcion: `${almacen?.codigo}-${p.codigo}-${e.codigo}`, aviso: `Incluye ${plural(e.niveles.length, 'nivel', 'niveles')} y ${plural(huecos, 'hueco', 'huecos')}.` }]),
             },
           ]
         : []),
@@ -256,16 +264,7 @@ export function UbicacionesPage() {
                 icono: <Trash2 className="h-4 w-4" />,
                 peligro: true,
                 onClick: () =>
-                  setBorrado({
-                    titulo: `Eliminar el almacén ${almacen.codigo}`,
-                    texto: `Se eliminarán sus ${plural(pasillos?.length ?? 0, 'pasillo', 'pasillos')} y ${plural(indice.length, 'hueco', 'huecos')}. Esta acción no se puede deshacer.`,
-                    accion: async () => {
-                      await ubicacionesApi.borrar('almacenes', almacen.id);
-                      notificar(`Almacén ${almacen.codigo} eliminado`);
-                      setParams({}, { replace: true });
-                      await cargarAlmacenes();
-                    },
-                  }),
+                  setAEliminar([{ tipo: 'almacen', id: almacen.id, descripcion: `${almacen.codigo} (${almacen.nombre})`, aviso: `Incluye ${plural(pasillos?.length ?? 0, 'pasillo', 'pasillos')} y ${plural(indice.length, 'hueco', 'huecos')}.` }]),
               },
             ]
           : []),
@@ -283,10 +282,22 @@ export function UbicacionesPage() {
     <>
       <CabeceraPagina
         titulo="Ubicaciones"
-        descripcion="Mapa del almacén. Pulsa un hueco para ver su contenido."
+        descripcion={modoSeleccion ? 'Modo selección: marca pasillos y estanterías con su casilla, o pulsa huecos sueltos. Después, «Eliminar».' : 'Mapa del almacén. Pulsa un hueco para ver su contenido.'}
         acciones={
           <>
-            {editable && almacen && (
+            {puedeEliminar && almacen && !!pasillos?.length && (
+              <Boton
+                variante={modoSeleccion ? 'peligro' : 'secundario'}
+                icono={<Trash2 className="h-4 w-4" />}
+                onClick={() => {
+                  setModoSeleccion((m) => !m);
+                  setSeleccion(new Map());
+                }}
+              >
+                {modoSeleccion ? 'Salir de la selección' : 'Seleccionar para eliminar'}
+              </Boton>
+            )}
+            {editable && almacen && !modoSeleccion && (
               <Boton icono={<Plus className="h-4 w-4" />} onClick={() => setModal({ tipo: 'pasillo-nuevo' })}>Nuevo pasillo</Boton>
             )}
             <MenuAcciones opciones={opcionesAlmacen} etiqueta="Más acciones del almacén" />
@@ -394,7 +405,14 @@ export function UbicacionesPage() {
           {pasillosVisibles.map((p) => (
             <section key={p.id} aria-labelledby={`pasillo-${p.id}`}>
               <div className="mb-3 flex items-center justify-between gap-3 border-b-2 border-tinta pb-2">
-                <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3">
+                  {modoSeleccion && (
+                    <Casilla
+                      etiqueta={`Seleccionar el pasillo ${p.codigo} entero`}
+                      marcada={marcado('pasillo', p.id)}
+                      onCambio={(v) => alternarSeleccion({ tipo: 'pasillo', id: p.id, descripcion: `${almacen?.codigo}-${p.codigo}`, padres: [] }, v)}
+                    />
+                  )}
                   <h2 id={`pasillo-${p.id}`} className="text-2xl">Pasillo {p.codigo}</h2>
                   {p.descripcion && <span className="text-suave">{p.descripcion}</span>}
                 </div>
@@ -410,7 +428,21 @@ export function UbicacionesPage() {
                     resaltados={resaltados}
                     editable={editable}
                     opciones={opcionesEstanteria(p, e)}
-                    onHueco={abrirHueco}
+                    onHueco={(h, n) => {
+                      if (!modoSeleccion) return abrirHueco(h);
+                      const padres = [clave('estanteria', e.id), clave('pasillo', p.id)];
+                      alternarSeleccion({ tipo: 'hueco', id: h.id, descripcion: `${almacen?.codigo}-${p.codigo}-${e.codigo}-${n.codigo}-${h.codigo}`, padres }, !marcado('hueco', h.id));
+                    }}
+                    seleccion={
+                      modoSeleccion
+                        ? {
+                            estanteria: marcado('estanteria', e.id, [clave('pasillo', p.id)]),
+                            hueco: (id: string) => marcado('hueco', id, [clave('estanteria', e.id), clave('pasillo', p.id)]),
+                            alternarEstanteria: (v: boolean) =>
+                              alternarSeleccion({ tipo: 'estanteria', id: e.id, descripcion: `${almacen?.codigo}-${p.codigo}-${e.codigo}`, padres: [clave('pasillo', p.id)] }, v),
+                          }
+                        : null
+                    }
                     onAnadirHueco={(n: Nivel) => {
                       const cap = n.huecos[n.huecos.length - 1]?.capacidad ?? null;
                       hacer(`Hueco añadido al nivel ${n.codigo}`, () => ubicacionesApi.anadirHueco(n.id, cap))().catch(async (err) => notificar(await mensajeError(err), 'error'));
@@ -418,7 +450,7 @@ export function UbicacionesPage() {
                     onAnadirNivel={() => setModal({ tipo: 'nivel-nuevo', estanteria: e })}
                   />
                 ))}
-                {editable && !resaltados && (
+                {editable && !resaltados && !modoSeleccion && (
                   <button
                     onClick={() => setModal({ tipo: 'estanteria-nueva', pasillo: p })}
                     className="flex min-h-[8rem] w-40 flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-linea text-suave hover:border-acero hover:text-acero"
@@ -533,11 +565,7 @@ export function UbicacionesPage() {
             onBorrar={() => {
               const m = modal;
               setModal(null);
-              setBorrado({
-                titulo: `Eliminar el hueco ${m.codigo}`,
-                texto: 'Si tiene etiqueta impresa, retírala de la estantería.',
-                accion: hacer(`Hueco ${m.codigo} eliminado`, () => ubicacionesApi.borrar('huecos', m.hueco.id)),
-              });
+              setAEliminar([{ tipo: 'hueco', id: m.hueco.id, descripcion: m.codigo, aviso: 'Si tiene etiqueta impresa, retírala de la estantería.' }]);
             }}
           />
         )}
@@ -553,18 +581,33 @@ export function UbicacionesPage() {
         )}
       </Dialogo>
 
-      <DialogoConfirmar
-        abierto={!!borrado}
-        titulo={borrado?.titulo ?? ''}
-        textoConfirmar="Eliminar"
-        peligro
-        onCerrar={() => setBorrado(null)}
-        onConfirmar={async () => {
-          if (borrado) await borrado.accion();
+      {modoSeleccion && (
+        <BarraSeleccion
+          texto={seleccion.size ? `Seleccionado: ${resumenSeleccion()}` : 'Marca pasillos, estanterías o huecos para eliminarlos'}
+          onCancelar={() => {
+            setSeleccion(new Map());
+            setModoSeleccion(false);
+          }}
+          onEliminar={() => {
+            const lista = [...seleccion.values()].filter((x) => !x.padres.some((k) => seleccion.has(k)));
+            if (lista.length) setAEliminar(lista.map(({ padres: _p, ...x }) => x));
+          }}
+        />
+      )}
+      {modoSeleccion && <div className="h-20" aria-hidden />}
+
+      <DialogoEliminar
+        elementos={aEliminar}
+        onCerrar={() => setAEliminar(null)}
+        onHecho={async (r) => {
+          setSeleccion(new Map());
+          setModoSeleccion(false);
+          if (r.eliminados.some((x) => x.tipo === 'almacen')) {
+            setParams({}, { replace: true });
+            await cargarAlmacenes();
+          } else await cargarEstructura();
         }}
-      >
-        <p>{borrado?.texto}</p>
-      </DialogoConfirmar>
+      />
     </>
   );
 }

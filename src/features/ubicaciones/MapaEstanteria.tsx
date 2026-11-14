@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react';
+import { Casilla } from '@/components/Casilla';
 import { MenuAcciones, type OpcionMenu } from '@/components/MenuAcciones';
 import { Placa } from '@/components/Placa';
 import type { Estanteria, Hueco, Nivel, Ocupacion } from '@/types/ubicaciones';
@@ -14,21 +15,24 @@ interface Props {
   onHueco: (h: Hueco, nivel: Nivel) => void;
   onAnadirHueco: (nivel: Nivel) => void;
   onAnadirNivel: () => void;
+  /** Modo selección para eliminar: estado de la estantería y de cada hueco. */
+  seleccion?: { estanteria: boolean; hueco: (id: string) => boolean; alternarEstanteria: (v: boolean) => void } | null;
 }
 
 /**
  * Estantería dibujada como en el almacén: montantes a los lados, baldas como
  * líneas horizontales y el nivel 1 abajo, junto al suelo.
  */
-export function MapaEstanteria({ estanteria: e, prefijo, ocupacion, resaltados, editable, opciones, onHueco, onAnadirHueco, onAnadirNivel }: Props) {
+export function MapaEstanteria({ estanteria: e, prefijo, ocupacion, resaltados, editable, opciones, onHueco, onAnadirHueco, onAnadirNivel, seleccion }: Props) {
   const huecos = e.niveles.flatMap((n) => n.huecos);
   const conMercancia = huecos.filter((h) => (ocupacion.get(h.id)?.unidades ?? 0) > 0).length;
 
   return (
-    <article className="min-w-0 max-w-full rounded-md border border-linea bg-white">
+    <article className={`min-w-0 max-w-full rounded-md border bg-white ${seleccion?.estanteria ? 'border-peligro ring-2 ring-peligro/40' : 'border-linea'}`}>
       <header className="flex items-start justify-between gap-2 border-b border-linea px-3 py-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
+            {seleccion && <Casilla etiqueta={`Seleccionar la estantería ${e.codigo} entera`} marcada={seleccion.estanteria} onCambio={seleccion.alternarEstanteria} />}
             <Placa tamano="sm">{e.codigo}</Placa>
             {e.descripcion && <span className="truncate text-sm font-medium">{e.descripcion}</span>}
           </div>
@@ -36,7 +40,7 @@ export function MapaEstanteria({ estanteria: e, prefijo, ocupacion, resaltados, 
             {huecos.length} {huecos.length === 1 ? 'hueco' : 'huecos'}, {conMercancia} con mercancía
           </p>
         </div>
-        <MenuAcciones opciones={opciones} etiqueta={`Acciones de la estantería ${e.codigo}`} />
+        {!seleccion && <MenuAcciones opciones={opciones} etiqueta={`Acciones de la estantería ${e.codigo}`} />}
       </header>
 
       <div className="overflow-x-auto p-3">
@@ -56,6 +60,7 @@ export function MapaEstanteria({ estanteria: e, prefijo, ocupacion, resaltados, 
                   const estado = estadoHueco(h, ocupacion.get(h.id));
                   const resaltado = resaltados?.has(h.id);
                   const atenuado = resaltados && !resaltado;
+                  const marcado = seleccion?.hueco(h.id);
                   const codigo = `${prefijo}-${e.codigo}-${n.codigo}-${h.codigo}`;
                   return (
                     <button
@@ -65,13 +70,14 @@ export function MapaEstanteria({ estanteria: e, prefijo, ocupacion, resaltados, 
                       aria-label={`Hueco ${codigo}, ${ESTADOS[estado].texto}`}
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[3px] border-2 font-rotulo text-sm font-bold transition-colors ${ESTADOS[estado].celda} ${
                         resaltado ? 'ring-4 ring-senal ring-offset-1' : ''
-                      } ${atenuado ? 'opacity-35' : ''}`}
+                      } ${atenuado ? 'opacity-35' : ''} ${marcado ? '!border-peligro !bg-peligro-claro !text-peligro ring-2 ring-peligro/50' : ''}`}
+                      aria-pressed={seleccion ? !!marcado : undefined}
                     >
                       {h.codigo.replace(/^H/, '')}
                     </button>
                   );
                 })}
-                {editable && n.huecos.length < 50 && (
+                {editable && !seleccion && n.huecos.length < 50 && (
                   <button
                     onClick={() => onAnadirHueco(n)}
                     className="flex h-11 w-8 shrink-0 items-center justify-center rounded-[3px] border-2 border-dashed border-linea text-suave hover:border-acero hover:text-acero"

@@ -118,8 +118,4 @@ export const ubicacionesApi = {
     if (!(filas as unknown[]).length) throw new Error('No tienes permiso para hacer esta operación.');
   },
 
-  async borrar(tabla: Tabla, id: string) {
-    const filas = comprobar(await supabase.from(tabla).delete().eq('id', id).select('id'));
-    if (!(filas as unknown[]).length) throw new Error('No tienes permiso para hacer esta operación.');
-  },
 };
