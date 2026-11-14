@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Mail, Pencil, Phone, Search, Trash2, UserPlus } from 'lucide-react';
 import { Dialogo } from '@/components/Dialogo';
-import { DialogoConfirmar } from '@/components/DialogoConfirmar';
+import { BarraSeleccion } from '@/components/BarraSeleccion';
+import { Casilla } from '@/components/Casilla';
+import { DialogoEliminar } from '@/components/DialogoEliminar';
+import type { ElementoAEliminar } from '@/features/modificaciones/api';
 import { useNotificar } from '@/components/Notificaciones';
 import { Aviso, Boton, Cargando, Entrada } from '@/components/ui';
 import { useAuth } from '@/features/auth/ProveedorAuth';
@@ -17,7 +20,11 @@ export function GestionContactos() {
   const [lista, setLista] = useState<Contacto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState<Contacto | 'nuevo' | null>(null);
-  const [borrando, setBorrando] = useState<Contacto | null>(null);
+  const puedeEliminar = puede('eliminar');
+  const [seleccion, setSeleccion] = useState<Map<string, Contacto>>(new Map());
+  const [aEliminar, setAEliminar] = useState<ElementoAEliminar[] | null>(null);
+  const alternar = (c: Contacto, v: boolean) => setSeleccion((s) => { const n = new Map(s); if (v) n.set(c.id, c); else n.delete(c.id); return n; });
+  const pedirEliminar = (filas: Contacto[]) => setAEliminar(filas.map((c) => ({ tipo: 'contacto', id: c.id, descripcion: c.empresa ? `${c.nombre} (${c.empresa})` : c.nombre })));
 
   const cargar = useCallback(async (t: string) => {
     try {
@@ -53,7 +60,8 @@ export function GestionContactos() {
       ) : (
         <ul className="divide-y divide-linea/70 rounded-md border border-linea bg-white">
           {lista.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+            <li key={c.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 ${seleccion.has(c.id) ? 'bg-peligro-claro/60' : ''}`}>
+              {puedeEliminar && <Casilla etiqueta={`Seleccionar ${c.nombre}`} marcada={seleccion.has(c.id)} onCambio={(v) => alternar(c, v)} />}
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{c.nombre}</p>
                 {c.empresa && <p className="text-sm text-suave">{c.empresa}</p>}
@@ -64,7 +72,7 @@ export function GestionContactos() {
               </div>
               <div className="flex shrink-0">
                 {puede('editar_productos') && <Boton variante="fantasma" className="px-3" onClick={() => setEditando(c)} aria-label={`Editar ${c.nombre}`} icono={<Pencil className="h-4 w-4" />} />}
-                {puede('gestionar_usuarios') && <Boton variante="fantasma" className="px-3 text-peligro hover:bg-peligro-claro" onClick={() => setBorrando(c)} aria-label={`Eliminar ${c.nombre}`} icono={<Trash2 className="h-4 w-4" />} />}
+                {puedeEliminar && <Boton variante="fantasma" className="px-3 text-peligro hover:bg-peligro-claro" onClick={() => pedirEliminar([c])} aria-label={`Eliminar ${c.nombre}`} icono={<Trash2 className="h-4 w-4" />} />}
               </div>
             </li>
           ))}
@@ -88,21 +96,22 @@ export function GestionContactos() {
         )}
       </Dialogo>
 
-      <DialogoConfirmar
-        abierto={!!borrando}
-        titulo={`Eliminar a ${borrando?.nombre ?? ''}`}
-        textoConfirmar="Eliminar"
-        peligro
-        onCerrar={() => setBorrando(null)}
-        onConfirmar={async () => {
-          if (!borrando) return;
-          await catalogoApi.borrarContacto(borrando.id);
-          notificar('Contacto eliminado');
-          await cargar(texto);
+      {seleccion.size > 0 && (
+        <BarraSeleccion
+          texto={`${seleccion.size} ${seleccion.size === 1 ? 'contacto seleccionado' : 'contactos seleccionados'}`}
+          onCancelar={() => setSeleccion(new Map())}
+          onEliminar={() => pedirEliminar([...seleccion.values()])}
+        />
+      )}
+      {seleccion.size > 0 && <div className="h-20" aria-hidden />}
+      <DialogoEliminar
+        elementos={aEliminar}
+        onCerrar={() => setAEliminar(null)}
+        onHecho={(r) => {
+          setSeleccion((s) => { const n = new Map(s); r.eliminados.forEach((e) => n.delete(e.id)); return n; });
+          cargar(texto);
         }}
-      >
-        <p>Solo se puede eliminar un contacto que no aparezca en ninguna entrada ni producto; si aparece, se conserva para no perder la trazabilidad.</p>
-      </DialogoConfirmar>
+      />
     </>
   );
 }

@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { BarraSeleccion } from '@/components/BarraSeleccion';
+import { Casilla } from '@/components/Casilla';
+import { DialogoEliminar } from '@/components/DialogoEliminar';
 import { Miniatura } from '@/components/Miniatura';
+import { useAuth } from '@/features/auth/ProveedorAuth';
+import type { ElementoAEliminar } from '@/features/modificaciones/api';
 import { Aviso, Boton, Cargando, Entrada, Selector } from '@/components/ui';
 import { formatearCantidad } from '@/lib/cantidad';
 import { mensajeError } from '@/lib/errores';
@@ -9,6 +14,8 @@ import type { Coleccion, Contacto, Producto } from '@/types/catalogo';
 import { catalogoApi, TAMANO_PAGINA, type FiltroProductos } from './api';
 
 export function ListaProductos() {
+  const { puede } = useAuth();
+  const puedeEliminar = puede('eliminar');
   const [params] = useSearchParams();
   const [filtro, setFiltro] = useState<FiltroProductos>(() => ({ soloStockBajo: params.get('stock_bajo') === '1', ubicacion: params.get('ubicacion') ?? undefined }));
   const [texto, setTexto] = useState('');
@@ -18,6 +25,10 @@ export function ListaProductos() {
   const [error, setError] = useState<string | null>(null);
   const [colecciones, setColecciones] = useState<Coleccion[]>([]);
   const [contactos, setContactos] = useState<Contacto[]>([]);
+  // Selección múltiple (solo administradores): se conserva al cambiar de página o de filtro
+  const [seleccion, setSeleccion] = useState<Map<string, Producto>>(new Map());
+  const [aEliminar, setAEliminar] = useState<ElementoAEliminar[] | null>(null);
+  const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     catalogoApi.colecciones().then(setColecciones).catch(() => {});
@@ -42,7 +53,15 @@ export function ListaProductos() {
     return () => {
       vigente = false;
     };
-  }, [filtro, pagina]);
+  }, [filtro, pagina, recarga]);
+
+  const alternar = (p: Producto, marcar: boolean) =>
+    setSeleccion((s) => {
+      const n = new Map(s);
+      if (marcar) n.set(p.id, p);
+      else n.delete(p.id);
+      return n;
+    });
 
   const cambiar = (c: Partial<FiltroProductos>) => {
     setFiltro((f) => ({ ...f, ...c }));
@@ -96,10 +115,26 @@ export function ListaProductos() {
         </div>
       ) : (
         <>
+          {puedeEliminar && (
+            <label className="mb-2 inline-flex min-h-[44px] cursor-pointer items-center gap-3 px-4 text-sm font-semibold text-suave">
+              <Casilla
+                etiqueta="Seleccionar todos los de esta página"
+                marcada={datos.filas.every((p) => seleccion.has(p.id))}
+                indeterminada={datos.filas.some((p) => seleccion.has(p.id))}
+                onCambio={(v) => datos.filas.forEach((p) => alternar(p, v))}
+              />
+              Seleccionar los de esta página
+            </label>
+          )}
           <ul className="divide-y divide-linea/70 rounded-md border border-linea bg-white">
             {datos.filas.map((p) => (
-              <li key={p.id}>
-                <Link to={`/productos/${p.id}`} className={`flex items-center gap-4 px-4 py-3 hover:bg-fondo/60 ${p.activo ? '' : 'opacity-60'}`}>
+              <li key={p.id} className={`flex items-center ${seleccion.has(p.id) ? 'bg-peligro-claro/60' : ''}`}>
+                {puedeEliminar && (
+                  <label className="flex min-h-[64px] cursor-pointer items-center pl-4">
+                    <Casilla etiqueta={`Seleccionar ${p.nombre}`} marcada={seleccion.has(p.id)} onCambio={(v) => alternar(p, v)} />
+                  </label>
+                )}
+                <Link to={`/productos/${p.id}`} className={`flex min-w-0 flex-1 items-center gap-4 px-4 py-3 hover:bg-fondo/60 ${p.activo ? '' : 'opacity-60'}`}>
                   <Miniatura ruta={p.foto_url} tamano={56} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{p.nombre}{!p.activo && <span className="ml-2 text-sm font-normal text-suave">(de baja)</span>}</p>
@@ -135,6 +170,35 @@ export function ListaProductos() {
           </div>
         </>
       )}
+      {seleccion.size > 0 && (
+        <BarraSeleccion
+          texto={`${seleccion.size} ${seleccion.size === 1 ? 'producto seleccionado' : 'productos seleccionados'}`}
+          onCancelar={() => setSeleccion(new Map())}
+          onEliminar={() =>
+            setAEliminar(
+              [...seleccion.values()].map((p) => ({
+                tipo: 'producto',
+                id: p.id,
+                descripcion: `${p.sku} ${p.nombre}`,
+                aviso: p.stock_total > 0 ? `Tiene ${formatearCantidad(p.stock_total)} uds en stock: se retirarán con un ajuste registrado.` : undefined,
+              })),
+            )
+          }
+        />
+      )}
+      {seleccion.size > 0 && <div className="h-20" aria-hidden />}
+      <DialogoEliminar
+        elementos={aEliminar}
+        onCerrar={() => setAEliminar(null)}
+        onHecho={(r) => {
+          setSeleccion((s) => {
+            const n = new Map(s);
+            r.eliminados.forEach((e) => n.delete(e.id));
+            return n;
+          });
+          setRecarga((x) => x + 1);
+        }}
+      />
     </>
   );
 }

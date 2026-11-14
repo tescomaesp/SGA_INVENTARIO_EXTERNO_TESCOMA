@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pencil, Plus, Printer, Trash2 } from 'lucide-react';
 import { Dialogo } from '@/components/Dialogo';
-import { DialogoConfirmar } from '@/components/DialogoConfirmar';
+import { BarraSeleccion } from '@/components/BarraSeleccion';
+import { Casilla } from '@/components/Casilla';
+import { DialogoEliminar } from '@/components/DialogoEliminar';
+import type { ElementoAEliminar } from '@/features/modificaciones/api';
 import { useNotificar } from '@/components/Notificaciones';
 import { Aviso, Boton, Campo, Cargando, Entrada } from '@/components/ui';
 import { useAuth } from '@/features/auth/ProveedorAuth';
@@ -65,7 +68,12 @@ export function GestionColecciones() {
   const [lista, setLista] = useState<Fila[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editando, setEditando] = useState<Fila | 'nueva' | null>(null);
-  const [borrando, setBorrando] = useState<Fila | null>(null);
+  const puedeEliminar = puede('eliminar');
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [aEliminar, setAEliminar] = useState<ElementoAEliminar[] | null>(null);
+  const alternar = (id: string, v: boolean) => setSeleccion((s) => { const n = new Set(s); if (v) n.add(id); else n.delete(id); return n; });
+  const pedirEliminar = (filas: Fila[]) =>
+    setAEliminar(filas.map((c) => ({ tipo: 'coleccion', id: c.id, descripcion: c.nombre, aviso: c.productos > 0 ? `Tiene ${c.productos} producto(s): no se podrá eliminar hasta que no le quede ninguno.` : undefined })));
 
   const cargar = useCallback(async () => {
     try {
@@ -94,7 +102,8 @@ export function GestionColecciones() {
       ) : (
         <ul className="divide-y divide-linea/70 rounded-md border border-linea bg-white">
           {lista.map((c) => (
-            <li key={c.id} className={`flex items-center gap-3 px-4 py-3 ${c.activa ? '' : 'text-suave'}`}>
+            <li key={c.id} className={`flex items-center gap-3 px-4 py-3 ${c.activa ? '' : 'text-suave'} ${seleccion.has(c.id) ? 'bg-peligro-claro/60' : ''}`}>
+              {puedeEliminar && <Casilla etiqueta={`Seleccionar ${c.nombre}`} marcada={seleccion.has(c.id)} onCambio={(v) => alternar(c.id, v)} />}
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{c.nombre}{!c.activa && <span className="ml-2 text-sm font-normal">(inactiva)</span>}</p>
                 {c.descripcion && <p className="text-sm text-suave">{c.descripcion}</p>}
@@ -106,7 +115,7 @@ export function GestionColecciones() {
               {editable && (
                 <div className="flex shrink-0">
                   <Boton variante="fantasma" className="px-3" onClick={() => setEditando(c)} aria-label={`Editar ${c.nombre}`} icono={<Pencil className="h-4 w-4" />} />
-                  <Boton variante="fantasma" className="px-3 text-peligro hover:bg-peligro-claro" onClick={() => setBorrando(c)} aria-label={`Eliminar ${c.nombre}`} icono={<Trash2 className="h-4 w-4" />} />
+                  {puedeEliminar && <Boton variante="fantasma" className="px-3 text-peligro hover:bg-peligro-claro" onClick={() => pedirEliminar([c])} aria-label={`Eliminar ${c.nombre}`} icono={<Trash2 className="h-4 w-4" />} />}
                 </div>
               )}
             </li>
@@ -131,25 +140,22 @@ export function GestionColecciones() {
         )}
       </Dialogo>
 
-      <DialogoConfirmar
-        abierto={!!borrando}
-        titulo={`Eliminar la colección ${borrando?.nombre ?? ''}`}
-        textoConfirmar="Eliminar"
-        peligro
-        onCerrar={() => setBorrando(null)}
-        onConfirmar={async () => {
-          if (!borrando) return;
-          await catalogoApi.borrarColeccion(borrando.id);
-          notificar('Colección eliminada');
-          await cargar();
+      {seleccion.size > 0 && (
+        <BarraSeleccion
+          texto={`${seleccion.size} ${seleccion.size === 1 ? 'colección seleccionada' : 'colecciones seleccionadas'}`}
+          onCancelar={() => setSeleccion(new Set())}
+          onEliminar={() => pedirEliminar(lista.filter((c) => seleccion.has(c.id)))}
+        />
+      )}
+      {seleccion.size > 0 && <div className="h-20" aria-hidden />}
+      <DialogoEliminar
+        elementos={aEliminar}
+        onCerrar={() => setAEliminar(null)}
+        onHecho={(r) => {
+          setSeleccion((s) => { const n = new Set(s); r.eliminados.forEach((e) => n.delete(e.id)); return n; });
+          cargar();
         }}
-      >
-        {borrando && borrando.productos > 0 ? (
-          <p>Tiene {borrando.productos} {borrando.productos === 1 ? 'producto' : 'productos'}, así que no se podrá eliminar. Desactívala para que no se use en productos nuevos.</p>
-        ) : (
-          <p>La colección no tiene productos y se eliminará definitivamente.</p>
-        )}
-      </DialogoConfirmar>
+      />
     </>
   );
 }

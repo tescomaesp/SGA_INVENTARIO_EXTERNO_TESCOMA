@@ -42,9 +42,6 @@ export const catalogoApi = {
   async editarColeccion(id: string, v: Partial<Coleccion>) {
     comprobar(await supabase.from('colecciones').update(v).eq('id', id).select('id').single());
   },
-  async borrarColeccion(id: string) {
-    comprobar(await supabase.from('colecciones').delete().eq('id', id).select('id').single());
-  },
 
   /* ---------------- Contactos ---------------- */
   async contactos(texto = '', limite = 200): Promise<Contacto[]> {
@@ -61,9 +58,6 @@ export const catalogoApi = {
   },
   async editarContacto(id: string, v: Omit<Contacto, 'id'>) {
     comprobar(await supabase.from('contactos').update(v).eq('id', id).select('id').single());
-  },
-  async borrarContacto(id: string) {
-    comprobar(await supabase.from('contactos').delete().eq('id', id).select('id').single());
   },
 
   /* ---------------- Productos ---------------- */
