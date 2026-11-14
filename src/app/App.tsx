@@ -24,6 +24,7 @@ const TrazabilidadPage = lazy(() => import('@/features/trazabilidad/Trazabilidad
 const LotePage = lazy(() => import('@/features/trazabilidad/LotePage').then((m) => ({ default: m.LotePage })));
 const PanelPage = lazy(() => import('@/features/panel/PanelPage').then((m) => ({ default: m.PanelPage })));
 const InformesPage = lazy(() => import('@/features/informes/InformesPage').then((m) => ({ default: m.InformesPage })));
+const ModificacionesPage = lazy(() => import('@/features/modificaciones/ModificacionesPage').then((m) => ({ default: m.ModificacionesPage })));
 const EtiquetasPage = lazy(() => import('@/features/ubicaciones/EtiquetasPage').then((m) => ({ default: m.EtiquetasPage })));
 import { Layout } from './Layout';
 
@@ -70,6 +71,14 @@ export function App() {
               <Route path="salidas" element={<SalidasPage />} />
               <Route path="traslados" element={<TrasladosPage />} />
               <Route path="trazabilidad" element={<TrazabilidadPage />} />
+              <Route
+                path="modificaciones"
+                element={
+                  <RutaProtegida requiere="eliminar">
+                    <ModificacionesPage />
+                  </RutaProtegida>
+                }
+              />
               <Route
                 path="informes"
                 element={
