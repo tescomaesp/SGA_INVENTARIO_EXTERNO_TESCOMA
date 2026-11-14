@@ -9,7 +9,8 @@ export type Accion =
   | 'ajustes'
   | 'informes'
   | 'gestionar_ubicaciones'
-  | 'gestionar_usuarios';
+  | 'gestionar_usuarios'
+  | 'eliminar';
 
 const MATRIZ: Record<Accion, RolId[]> = {
   ver_stock: ['admin', 'responsable', 'operario', 'consulta'],
@@ -19,6 +20,7 @@ const MATRIZ: Record<Accion, RolId[]> = {
   informes: ['admin', 'responsable', 'consulta'],
   gestionar_ubicaciones: ['admin'],
   gestionar_usuarios: ['admin'],
+  eliminar: ['admin'],
 };
 
 export const ETIQUETA_ACCION: Record<Accion, string> = {
@@ -29,6 +31,7 @@ export const ETIQUETA_ACCION: Record<Accion, string> = {
   informes: 'Ver informes y exportar',
   gestionar_ubicaciones: 'Gestionar ubicaciones y colecciones',
   gestionar_usuarios: 'Gestionar usuarios y roles',
+  eliminar: 'Eliminar elementos y ver el registro de modificaciones',
 };
 
 export const ACCIONES = Object.keys(MATRIZ) as Accion[];

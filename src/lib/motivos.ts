@@ -18,5 +18,6 @@ export type MotivoAjuste = keyof typeof MOTIVOS_AJUSTE;
 
 export function textoMotivo(motivo: string | null): string | null {
   if (!motivo) return null;
+  if (motivo === 'eliminacion') return 'Retirada al eliminar el producto';
   return (MOTIVOS_SALIDA as Record<string, string>)[motivo] ?? (MOTIVOS_AJUSTE as Record<string, string>)[motivo] ?? motivo;
 }
