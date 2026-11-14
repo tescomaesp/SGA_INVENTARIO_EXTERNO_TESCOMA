@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { Aviso, Boton, Campo, Entrada } from '@/components/ui';
 import { mensajeError } from '@/lib/errores';
@@ -7,7 +7,7 @@ import { useAuth } from './ProveedorAuth';
 import { PantallaAcceso } from './PantallaAcceso';
 
 export function AccesoPage() {
-  const { sesion, perfil, motivoSalida } = useAuth();
+  const { sesion, perfil, cargando, motivoSalida, errorPerfil, cerrarSesion } = useAuth();
   const location = useLocation();
   const desde = (location.state as { desde?: string } | null)?.desde ?? '/';
 
@@ -16,7 +16,23 @@ export function AccesoPage() {
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  // Si el inicio de sesión funciona pero el perfil no se puede cargar, no dejar el botón «pensando»
+  useEffect(() => {
+    if (enviando && !cargando && sesion && !perfil) setEnviando(false);
+  }, [enviando, cargando, sesion, perfil]);
+
+  // Y si el servidor no contesta, avisar en lugar de esperar indefinidamente
+  useEffect(() => {
+    if (!enviando) return;
+    const t = setTimeout(() => {
+      setEnviando(false);
+      setError('El servidor está tardando demasiado en responder. Comprueba tu conexión y vuelve a intentarlo.');
+    }, 20000);
+    return () => clearTimeout(t);
+  }, [enviando]);
+
   if (sesion && perfil) return <Navigate to={desde} replace />;
+  const fallaPerfil = !!sesion && !perfil && !cargando;
 
   async function entrar(e: FormEvent) {
     e.preventDefault();
@@ -40,6 +56,15 @@ export function AccesoPage() {
       {!configuracionCompleta && (
         <div className="mb-5">
           <Aviso>Falta configurar la conexión con Supabase. Crea el archivo .env a partir de .env.example.</Aviso>
+        </div>
+      )}
+      {fallaPerfil && (
+        <div className="mb-5 space-y-3">
+          <Aviso>
+            Has iniciado sesión, pero no se ha podido cargar tu perfil{errorPerfil ? `: ${errorPerfil}` : '.'} Puede ser un problema de configuración del servidor:
+            avisa al administrador de la plataforma.
+          </Aviso>
+          <Boton variante="secundario" ancho onClick={cerrarSesion}>Cerrar sesión e intentarlo con otra cuenta</Boton>
         </div>
       )}
       {motivoSalida && !error && (

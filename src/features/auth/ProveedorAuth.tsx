@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { mensajeError } from '@/lib/errores';
 import { supabase } from '@/lib/supabase';
 import { puede as puedeRol, type Accion } from '@/lib/permisos';
 import type { Perfil } from '@/types/modelos';
@@ -10,6 +11,8 @@ interface AuthCtx {
   cargando: boolean;
   /** Motivo por el que se cerró la sesión automáticamente (p. ej. cuenta desactivada). */
   motivoSalida: string | null;
+  /** Error al cargar el perfil tras iniciar sesión (p. ej. configuración del servidor). */
+  errorPerfil: string | null;
   puede: (accion: Accion) => boolean;
   recargarPerfil: () => Promise<void>;
   cerrarSesion: () => Promise<void>;
@@ -25,6 +28,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
   // de la sesión, se sigue "cargando": así nunca hay un instante con sesión pero sin perfil.
   const [perfilCargadoDe, setPerfilCargadoDe] = useState<string | null>(null);
   const [motivoSalida, setMotivoSalida] = useState<string | null>(null);
+  const [errorPerfil, setErrorPerfil] = useState<string | null>(null);
 
   const usuarioId = sesion?.user.id ?? null;
 
@@ -46,6 +50,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.from('perfiles').select('*').eq('id', id).maybeSingle();
     if (error) {
       console.error(error);
+      setErrorPerfil(await mensajeError(error));
       setPerfil(null);
     } else if (!data || !data.activo) {
       setMotivoSalida('Tu cuenta está desactivada. Habla con un administrador.');
@@ -53,6 +58,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
     } else {
       setPerfil(data as Perfil);
+      setErrorPerfil(null);
     }
     setPerfilCargadoDe(id);
   }, []);
@@ -60,6 +66,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!usuarioId) {
       setPerfil(null);
+      setErrorPerfil(null);
       setPerfilCargadoDe(null);
       return;
     }
@@ -82,13 +89,14 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
       perfil,
       cargando: !sesionLista || (!!usuarioId && perfilCargadoDe !== usuarioId),
       motivoSalida,
+      errorPerfil,
       puede: (accion) => puedeRol(perfil?.rol_id, accion),
       recargarPerfil: async () => {
         if (usuarioId) await cargarPerfil(usuarioId);
       },
       cerrarSesion,
     }),
-    [sesion, perfil, sesionLista, usuarioId, perfilCargadoDe, motivoSalida, cargarPerfil, cerrarSesion],
+    [sesion, perfil, sesionLista, usuarioId, perfilCargadoDe, motivoSalida, errorPerfil, cargarPerfil, cerrarSesion],
   );
 
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
