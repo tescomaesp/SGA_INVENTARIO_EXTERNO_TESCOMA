@@ -135,6 +135,7 @@ export function NuevaEntradaPage() {
     else if (libre !== null && cantidad && cantidad > libre) e.hueco = 'La cantidad no cabe en este hueco.';
     if (!contacto) e.contacto = 'Indica la persona de contacto.';
     if (caducidad && !lote.trim()) e.lote = 'Para indicar la caducidad hay que indicar el lote.';
+    if (esNuevo && !notas.trim()) e.notas = 'Indica el motivo de la entrada y de quién se recibe.';
     return e;
   };
   const errores = intentado ? validar() : {};
@@ -350,10 +351,32 @@ export function NuevaEntradaPage() {
             {errores.contacto && <p className="mt-1.5 text-sm text-peligro" role="alert">{errores.contacto}</p>}
           </div>
 
+          {esNuevo && (
+            <div id="campo-notas">
+              <Campo
+                etiqueta="Notas"
+                htmlFor="notas"
+                obligatorio
+                error={errores.notas}
+                ayuda="Obligatorio en productos nuevos: motivo de la entrada y de quién se recibe."
+              >
+                <textarea
+                  id="notas"
+                  value={notas}
+                  maxLength={500}
+                  rows={3}
+                  onChange={(e) => setNotas(e.target.value)}
+                  placeholder="Ej.: Primer pedido del proveedor; lo entrega Transportes Ruiz"
+                  className="entrada"
+                />
+              </Campo>
+            </div>
+          )}
+
           <div className="border-t border-linea pt-4">
             <button type="button" onClick={() => setMasDatos((m) => !m)} aria-expanded={masDatos} className="inline-flex min-h-[44px] items-center gap-2 font-semibold text-acero">
               <ChevronDown className={`h-4 w-4 transition-transform ${masDatos ? 'rotate-180' : ''}`} aria-hidden />
-              Lote, caducidad, albarán y notas
+              {esNuevo ? 'Lote, caducidad y albarán' : 'Lote, caducidad, albarán y notas'}
             </button>
             {masDatos && (
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
@@ -368,9 +391,11 @@ export function NuevaEntradaPage() {
                 <Campo etiqueta="Nº de albarán o documento" htmlFor="documento">
                   <Entrada id="documento" value={documento} maxLength={60} onChange={(e) => setDocumento(e.target.value)} />
                 </Campo>
-                <Campo etiqueta="Notas" htmlFor="notas">
-                  <Entrada id="notas" value={notas} maxLength={500} onChange={(e) => setNotas(e.target.value)} />
-                </Campo>
+                {!esNuevo && (
+                  <Campo etiqueta="Notas" htmlFor="notas">
+                    <Entrada id="notas" value={notas} maxLength={500} onChange={(e) => setNotas(e.target.value)} />
+                  </Campo>
+                )}
               </div>
             )}
           </div>
