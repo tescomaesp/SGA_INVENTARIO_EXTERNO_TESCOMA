@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowLeftRight, CalendarClock, PackageMinus, PackagePlus, ShieldAlert } from 'lucide-react';
+import { ArrowLeftRight, CalendarClock, PackageMinus, PackagePlus, ShieldAlert } from 'lucide-react';
 import { FilaMovimiento } from '@/components/FilaMovimiento';
 import { Miniatura } from '@/components/Miniatura';
 import { Aviso, Boton, Cargando } from '@/components/ui';
@@ -11,7 +11,7 @@ import { formatearCantidad } from '@/lib/cantidad';
 import { mensajeError } from '@/lib/errores';
 import { formatearFecha } from '@/lib/formato';
 import { supabase } from '@/lib/supabase';
-import type { Lote, Movimiento, Producto } from '@/types/catalogo';
+import type { Lote, Movimiento } from '@/types/catalogo';
 import { GraficoEntradasSalidas, type PuntoSerie } from './GraficoEntradasSalidas';
 
 interface ResumenPeriodo {
@@ -34,6 +34,19 @@ interface Indicadores {
   caducan_pronto: number;
   caducados: number;
   descuadres: number | null;
+}
+
+/** Días que abarca el bloque de ajustes negativos del panel. */
+const DIAS_AJUSTES = 30;
+
+interface AjusteNegativo {
+  producto_id: string;
+  sku: string;
+  nombre: string;
+  foto_url: string | null;
+  unidades: number;
+  ajustes: number;
+  ultimo: string;
 }
 
 interface FilaSerie {
@@ -105,7 +118,7 @@ export function PanelPage() {
   const [error, setError] = useState<string | null>(null);
   const [modo, setModo] = useState<Modo>('dia');
   const [serie, setSerie] = useState<FilaSerie[] | null>(null);
-  const [stockBajo, setStockBajo] = useState<Producto[]>([]);
+  const [ajustesNeg, setAjustesNeg] = useState<AjusteNegativo[] | null>(null);
   const [caducidades, setCaducidades] = useState<Lote[]>([]);
   const [pasillos, setPasillos] = useState<OcupacionPasillo[] | null>(null);
   const [ultimos, setUltimos] = useState<Movimiento[] | null>(null);
@@ -114,8 +127,9 @@ export function PanelPage() {
     rpc<Indicadores>('panel_indicadores', {}).then(setInd).catch(async (e) => setError(await mensajeError(e)));
     catalogoApi.movimientos({}, 0, 8).then(setUltimos).catch(() => setUltimos([]));
 
-    supabase.from('v_productos').select('*').eq('activo', true).eq('stock_bajo', true).order('stock_total').limit(6)
-      .then(({ data }) => setStockBajo(((data ?? []) as Producto[]).map((p) => ({ ...p, stock_total: Number(p.stock_total), stock_minimo: Number(p.stock_minimo) }))));
+    supabase.rpc('panel_ajustes_negativos', { p_dias: DIAS_AJUSTES }).then(({ data }) =>
+      setAjustesNeg(((data ?? []) as AjusteNegativo[]).map((a) => ({ ...a, unidades: Number(a.unidades) }))),
+    );
 
     const limite = new Date();
     limite.setDate(limite.getDate() + 30);
@@ -260,23 +274,25 @@ export function PanelPage() {
         </div>
 
         <div className="min-w-0 space-y-6">
-          <Bloque titulo="Stock bajo" enlace={ind && ind.stock_bajo > 0 ? { a: '/productos?stock_bajo=1', texto: `Ver los ${ind.stock_bajo}` } : undefined}>
-            {stockBajo.length === 0 ? (
-              <p className="px-4 py-6 text-suave">Ningún producto está por debajo de su mínimo.</p>
+          <Bloque titulo="Ajustes negativos" enlace={{ a: '/trazabilidad?tipos=ajuste', texto: 'Ver todos los ajustes' }}>
+            <p className="px-4 pt-3 text-sm text-suave">Unidades perdidas en ajustes de inventario (recuentos, roturas, errores) en los últimos {DIAS_AJUSTES} días.</p>
+            {!ajustesNeg ? (
+              <Cargando />
+            ) : ajustesNeg.length === 0 ? (
+              <p className="px-4 py-6 text-suave">Ningún ajuste negativo en este periodo.</p>
             ) : (
-              <ul className="divide-y divide-linea/70">
-                {stockBajo.map((p) => (
-                  <li key={p.id}>
-                    <Link to={`/productos/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-fondo/60">
-                      <Miniatura ruta={p.foto_url} tamano={40} />
+              <ul className="mt-2 divide-y divide-linea/70">
+                {ajustesNeg.map((a) => (
+                  <li key={a.producto_id}>
+                    <Link to={`/trazabilidad?producto=${a.producto_id}&tipos=ajuste`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-fondo/60">
+                      <Miniatura ruta={a.foto_url} tamano={40} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{p.nombre}</span>
-                        <span className="block text-sm text-suave">Mínimo {formatearCantidad(p.stock_minimo)}</span>
+                        <span className="block truncate font-medium">{a.nombre}</span>
+                        <span className="block text-sm text-suave">
+                          {a.sku}, {a.ajustes} {a.ajustes === 1 ? 'ajuste' : 'ajustes'}, el último {formatearFecha(a.ultimo)}
+                        </span>
                       </span>
-                      <span className="inline-flex items-center gap-1 font-rotulo text-xl font-bold tabular-nums text-peligro">
-                        <AlertTriangle className="h-4 w-4" aria-hidden />
-                        {formatearCantidad(p.stock_total)}
-                      </span>
+                      <span className="font-rotulo text-xl font-bold tabular-nums text-peligro">−{formatearCantidad(a.unidades)}</span>
                     </Link>
                   </li>
                 ))}
