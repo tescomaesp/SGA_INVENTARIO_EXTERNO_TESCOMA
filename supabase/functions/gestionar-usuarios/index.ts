@@ -8,8 +8,19 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const ROLES = ['admin', 'responsable', 'operario', 'consulta'] as const;
 type Rol = (typeof ROLES)[number];
 
+// CORS: solo se aceptan llamadas desde la web de la aplicación (el origen de SITE_URL).
+// Si SITE_URL no está configurado se usa «*» para no dejar la función inaccesible,
+// pero sigue siendo obligatorio un token de sesión válido de un administrador.
+const origenPermitido = (() => {
+  try {
+    return new URL(Deno.env.get('SITE_URL') ?? '').origin;
+  } catch {
+    return '*';
+  }
+})();
 const cors = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': origenPermitido,
+  Vary: 'Origin',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
