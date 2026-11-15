@@ -32,7 +32,7 @@ Crea un proyecto nuevo y, en **Authentication**, configura lo siguiente:
 
 ### 2. Crear la base de datos
 
-**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene todas las migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 9 filas, del `001_roles_perfiles.sql` al `009_eliminaciones_registro.sql`.
+**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene todas las migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 10 filas, del `001_roles_perfiles.sql` al `010_seguridad.sql`.
 
 **Actualizar una instalación anterior:** ejecuta el `instalar_todo.sql` nuevo igual que la primera vez. Como todas las migraciones se pueden repetir, aplica solo lo que falta y conserva todos los datos.
 
@@ -101,6 +101,36 @@ npm run dev               # http://localhost:5173
 En Supabase, la *Site URL*, las *Redirect URLs* y el secreto `SITE_URL` de la función deben usar la dirección completa con la subcarpeta, por ejemplo `https://usuario.github.io/repositorio` y `https://usuario.github.io/repositorio/crear-contrasena`.
 
 **Con Vercel o Netlify.** Importa el repositorio, define las variables de `.env` en su panel y usa `npm run build` como comando de compilación (carpeta de salida `dist`). Los archivos `vercel.json` y `public/_redirects` ya están incluidos para que las rutas funcionen al recargar la página. Recuerda actualizar *Site URL*, *Redirect URLs* y el secreto `SITE_URL` con el dominio final.
+
+## Seguridad
+
+**Qué es público y qué no.** El repositorio y la web son públicos, pero los datos no:
+
+- **Clave pública (`anon` o *publishable*):** es la única clave que lleva la web, y está pensada para eso. Sin una sesión iniciada no da acceso a nada: la base de datos responde «permiso denegado» a cualquier tabla o vista.
+- **Clave secreta (`service_role` o *secret*):** solo existe en los servidores de Supabase, donde la usa la función `gestionar-usuarios`. Nunca va en el código, en GitHub ni en la web.
+- **Ficheros `.env`:** no se suben nunca, y el `.gitignore` también bloquea copias de seguridad y exportaciones (`.csv`, `.sql`, `.json`, `.xlsx`, `.sqlite`…).
+
+**Base de datos.** El archivo `supabase/security_fix.sql` (la migración 010) refuerza la protección. Se puede ejecutar cuando se quiera en el SQL Editor, por ejemplo tras crear tablas a mano:
+
+- activa RLS en todas las tablas;
+- elimina cualquier política que se aplique a usuarios sin sesión;
+- retira a los anónimos todo permiso sobre tablas, vistas y funciones, también las que se creen en el futuro;
+- fija la ruta de búsqueda de las funciones;
+- impide que haya espacios de archivos públicos.
+
+Las reglas por rol no se tocan: con sesión, cada usuario solo puede lo que su rol permite, y los movimientos y el registro de modificaciones no los puede cambiar nadie.
+
+**Excepciones documentadas:**
+
+- `registrar_acceso_fallido()` admite llamadas sin sesión. Solo anota en el registro de auditoría los intentos de acceso fallidos.
+- Las vistas `v_movimientos`, `v_lotes` y `v_informe_movimientos` se ejecutan con los permisos de su propietario. Así el historial puede seguir mostrando productos y ubicaciones eliminados. Cada vista comprueba el permiso del usuario (`tiene_permiso('ver_stock')`) y los anónimos no tienen acceso. El *Security Advisor* de Supabase las señala como «Security Definer View», y es intencionado.
+
+**Aplicación.**
+
+- No existe registro público: las cuentas solo las crea un administrador por invitación.
+- Sin sesión solo se ve la pantalla de acceso.
+- Si la sesión caduca o se cierra en otra pestaña, la aplicación vuelve al acceso y lo explica.
+- La función `gestionar-usuarios` solo acepta llamadas desde la web de la aplicación (el origen de `SITE_URL`) y con la sesión de un administrador.
 
 ## Roles
 
@@ -335,8 +365,9 @@ Se puede filtrar y exportar a Excel. El registro no se puede modificar ni borrar
 | 007 | Indicadores del panel, series para gráficos e informes |
 | 008 | Filtro del catálogo por ubicación |
 | 009 | Eliminación de elementos, registro de modificaciones y ajustes negativos del panel |
+| 010 | Blindaje de seguridad (también en `supabase/security_fix.sql`) |
 
-Las nueve se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
+Las diez se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
 
 ## Cómo se ha probado
 
