@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { mensajeError } from '@/lib/errores';
 import { supabase } from '@/lib/supabase';
@@ -31,15 +31,26 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
   const [errorPerfil, setErrorPerfil] = useState<string | null>(null);
 
   const usuarioId = sesion?.user.id ?? null;
+  // true mientras el propio usuario cierra sesión: así se distingue de una sesión que caduca
+  const saliendo = useRef(false);
+  const habiaSesion = useRef(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
+      habiaSesion.current = !!data.session;
       setSesion(data.session);
       setSesionLista(true);
     });
     // No se llama a Supabase dentro de este callback (puede bloquear el cliente);
     // la carga del perfil se hace en el efecto de abajo.
-    const { data } = supabase.auth.onAuthStateChange((_evento, s) => {
+    const { data } = supabase.auth.onAuthStateChange((evento, s) => {
+      // Si la sesión se pierde sin que el usuario haya pulsado «Cerrar sesión» (token caducado
+      // que no se puede renovar, contraseña cambiada, usuario desactivado…), se le explica.
+      if (evento === 'SIGNED_OUT' && habiaSesion.current && !saliendo.current) {
+        setMotivoSalida('Tu sesión ha caducado o se ha cerrado. Vuelve a iniciar sesión.');
+      }
+      if (evento === 'SIGNED_IN') saliendo.current = false;
+      habiaSesion.current = !!s;
       setSesion(s);
       setSesionLista(true);
     });
@@ -55,6 +66,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     } else if (!data || !data.activo) {
       setMotivoSalida('Tu cuenta está desactivada. Habla con un administrador.');
       setPerfil(null);
+      saliendo.current = true;
       await supabase.auth.signOut();
     } else {
       setPerfil(data as Perfil);
@@ -80,6 +92,7 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
       /* no bloquear la salida si falla la auditoría */
     }
     setMotivoSalida(null);
+    saliendo.current = true;
     await supabase.auth.signOut();
   }, []);
 
