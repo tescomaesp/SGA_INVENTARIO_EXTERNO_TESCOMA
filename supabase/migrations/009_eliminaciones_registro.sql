@@ -91,8 +91,9 @@ revoke delete on public.almacenes, public.pasillos, public.estanterias, public.n
 alter table public.movimientos drop constraint if exists movimientos_motivo_valido;
 alter table public.movimientos add constraint movimientos_motivo_valido check (
   motivo is null
-  or (tipo = 'salida' and motivo in ('envio', 'devolucion', 'merma', 'uso_interno', 'otro'))
-  or (tipo = 'ajuste' and motivo in ('recuento', 'rotura', 'error_registro', 'otro', 'eliminacion'))
+  or (tipo = 'salida'  and motivo in ('prestamo', 'envio', 'devolucion', 'merma', 'uso_interno', 'otro'))
+  or (tipo = 'ajuste'  and motivo in ('recuento', 'rotura', 'error_registro', 'otro', 'eliminacion'))
+  or (tipo = 'entrada' and motivo in ('devolucion_prestamo', 'carga_inicial'))
 );
 
 -- ---------------------------------------------------------------------
