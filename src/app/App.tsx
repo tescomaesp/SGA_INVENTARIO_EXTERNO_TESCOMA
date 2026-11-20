@@ -24,6 +24,9 @@ const TrazabilidadPage = lazy(() => import('@/features/trazabilidad/Trazabilidad
 const LotePage = lazy(() => import('@/features/trazabilidad/LotePage').then((m) => ({ default: m.LotePage })));
 const PanelPage = lazy(() => import('@/features/panel/PanelPage').then((m) => ({ default: m.PanelPage })));
 const InformesPage = lazy(() => import('@/features/informes/InformesPage').then((m) => ({ default: m.InformesPage })));
+const PrestamosPage = lazy(() => import('@/features/prestamos/PrestamosPage').then((m) => ({ default: m.PrestamosPage })));
+const NuevaDevolucionPage = lazy(() => import('@/features/prestamos/NuevaDevolucionPage').then((m) => ({ default: m.NuevaDevolucionPage })));
+const AltaProductosPage = lazy(() => import('@/features/catalogo/AltaProductosPage').then((m) => ({ default: m.AltaProductosPage })));
 const ModificacionesPage = lazy(() => import('@/features/modificaciones/ModificacionesPage').then((m) => ({ default: m.ModificacionesPage })));
 const EtiquetasPage = lazy(() => import('@/features/ubicaciones/EtiquetasPage').then((m) => ({ default: m.EtiquetasPage })));
 import { Layout } from './Layout';
@@ -70,6 +73,23 @@ export function App() {
               <Route path="entradas" element={<EntradasPage />} />
               <Route path="salidas" element={<SalidasPage />} />
               <Route path="traslados" element={<TrasladosPage />} />
+              <Route path="prestamos" element={<PrestamosPage />} />
+              <Route
+                path="devoluciones/nueva"
+                element={
+                  <RutaProtegida requiere="registrar_movimientos">
+                    <NuevaDevolucionPage />
+                  </RutaProtegida>
+                }
+              />
+              <Route
+                path="productos/alta"
+                element={
+                  <RutaProtegida requiere="editar_productos">
+                    <AltaProductosPage />
+                  </RutaProtegida>
+                }
+              />
               <Route path="trazabilidad" element={<TrazabilidadPage />} />
               <Route
                 path="modificaciones"

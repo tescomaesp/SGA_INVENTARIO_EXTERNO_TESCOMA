@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
-  ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, BarChart3, ClipboardList, Boxes, History, Home, LogOut, Map as IconoMapa, Menu, Users, X,
+  ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, BarChart3, ClipboardList, Undo2, Boxes, History, Home, LogOut, Map as IconoMapa, Menu, Users, X,
 } from 'lucide-react';
 import { Avatar } from '@/components/Avatar';
 import { Placa } from '@/components/Placa';
@@ -21,6 +21,7 @@ const DISPONIBLES: Enlace[] = [
   { a: '/entradas', texto: 'Entradas', icono: ArrowDownToLine },
   { a: '/salidas', texto: 'Salidas', icono: ArrowUpFromLine },
   { a: '/traslados', texto: 'Traslados', icono: ArrowLeftRight },
+  { a: '/prestamos', texto: 'Préstamos', icono: Undo2 },
   { a: '/productos', texto: 'Productos', icono: Boxes },
   { a: '/ubicaciones', texto: 'Ubicaciones', icono: IconoMapa },
   { a: '/trazabilidad', texto: 'Trazabilidad', icono: History },
