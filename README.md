@@ -32,7 +32,7 @@ Crea un proyecto nuevo y, en **Authentication**, configura lo siguiente:
 
 ### 2. Crear la base de datos
 
-**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene todas las migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 10 filas, del `001_roles_perfiles.sql` al `010_seguridad.sql`.
+**Opción recomendada, desde el navegador:** abre el archivo `supabase/instalar_todo.sql`, copia **todo** su contenido, pégalo en **SQL Editor > New query** y pulsa **Run**. Contiene todas las migraciones en orden. Si Supabase avisa de que la consulta tiene operaciones «destructivas» (`revoke`, `drop policy`…), confirma: forman parte de la configuración de permisos. Al final debe mostrar una tabla con 11 filas, del `001_roles_perfiles.sql` al `011_prestamos_carga_inicial.sql`.
 
 **Actualizar una instalación anterior:** ejecuta el `instalar_todo.sql` nuevo igual que la primera vez. Como todas las migraciones se pueden repetir, aplica solo lo que falta y conserva todos los datos.
 
@@ -231,7 +231,7 @@ Es la primera pantalla al entrar. De un vistazo muestra:
 - **Indicadores:** referencias activas, unidades en stock, unidades que han entrado y salido hoy y en la semana (desde el lunes), y ocupación del almacén. La ocupación es un porcentaje si los huecos tienen capacidad definida; si no, indica cuántos huecos tienen mercancía.
 - **Gráfico de entradas y salidas** de los últimos 14 días, 12 semanas o 12 meses.
 - **Ajustes negativos:** los productos que más unidades han perdido en ajustes de inventario (recuentos, roturas, errores) en los últimos 30 días, con enlace a esos ajustes en Trazabilidad. No cuenta el stock retirado al eliminar productos.
-- **Caducidades:** lotes con stock caducados o que caducan en los próximos 30 días.
+- **Pendientes de devolución:** los productos que han salido y aún no han vuelto, con cuántas unidades, en cuántos eventos y desde cuándo.
 - El aviso de **stock bajo** sigue disponible en el filtro «Stock bajo» del catálogo.
 - **Ocupación por pasillo**, con una barra por pasillo que se pone roja a partir del 90 %.
 - **Últimos movimientos.**
@@ -259,6 +259,30 @@ Cada informe muestra una vista previa de las 100 primeras filas, con totales cal
 Las exportaciones incluyen todas las filas del informe, no solo las de la vista previa, hasta un máximo de 100.000. Para listados muy largos, Excel es el formato más cómodo.
 
 **Catálogo.** El listado de productos se filtra por nombre o SKU, colección, persona de contacto, stock bajo y **ubicación**. En la ubicación vale cualquier parte de un código: `P01` (todo un pasillo), `P01-E03` (una estantería) o el código completo de un hueco. La ficha de cada producto incluye su **historial completo** en línea temporal, con el stock que quedaba tras cada movimiento.
+
+## Préstamos para eventos y devoluciones
+
+El almacén presta la mercancía para eventos: todo lo que sale tiene que volver.
+
+- **Salidas.** El motivo por defecto es **Préstamo para evento**. En toda salida que no sea **Merma o rotura**, el campo **Evento o destino** es obligatorio, y sugiere los eventos que ya tienen material fuera. No importa si el nombre se escribe con otras mayúsculas o espacios: «Feria Madrid 2026» y «feria madrid  2026» son el mismo evento.
+- **Pendiente de devolver.** Para cada producto y evento, se suman todas las salidas excepto las mermas y se restan las devoluciones.
+- **Préstamos** (menú lateral). Muestra todo lo que está fuera, **por evento** o **por producto**: cuántas unidades salieron, cuántas han vuelto, cuántas faltan y desde cuándo. Se puede buscar y exportar a Excel. El panel muestra un resumen en **Pendientes de devolución**.
+- **Registrar devolución** (en Préstamos, en Entradas o en el panel). Pasos:
+  1. Elige qué vuelve, de la lista de pendientes, buscando o escaneando la etiqueta del producto.
+  2. Indica cuántas unidades vuelven.
+  3. Elige dónde se guardan. Se sugiere el hueco del que salió.
+  4. Opcionalmente, indica quién lo devuelve y añade notas.
+
+  No se puede devolver más de lo que falta de ese evento. La devolución entra en el stock y en el historial aparece como «Devolución de préstamo» y «vuelve de» el evento.
+
+## Alta de productos (carga inicial)
+
+Para dar de alta en el almacén, por primera vez, productos que ya están en las estanterías. Está en **Productos > Alta de productos**, solo para administrador y responsable. El día a día sigue registrándose en **Entradas**.
+
+- **Uno a uno.** Ficha del producto (nombre, colección, foto opcional, contacto habitual, stock mínimo y notas) y una o varias ubicaciones con sus unidades. Si se dejan vacías, se crea solo la ficha. Al terminar ofrece imprimir su etiqueta.
+- **Importar hoja de cálculo.** Descarga la plantilla Excel, rellena una fila por producto y hueco, y súbela (también admite CSV). Si un producto está en varios huecos, repite su nombre y colección: se crea un solo producto. La aplicación primero lo revisa todo sin guardar nada y muestra cada error con su fila (colección que no existe, ubicación desconocida, producto que ya existe, cantidad no numérica…). Se puede marcar **Crear las colecciones que no existen**. Solo se guarda cuando no queda ningún error, y entonces todo a la vez. El código (SKU) lo asigna la aplicación y la foto se añade después desde la ficha.
+
+Las unidades de partida quedan en el historial como entradas con motivo «Carga inicial».
 
 ## Eliminar elementos y registro de modificaciones
 
@@ -352,6 +376,13 @@ Se puede filtrar y exportar a Excel. El registro no se puede modificar ni borrar
 39. Entra como operario: no deben aparecer casillas, el botón **Seleccionar para eliminar** ni el menú **Modificaciones**.
 40. Registra la entrada de un producto nuevo sin notas: el formulario no debe dejar guardarla.
 
+**Préstamos y alta de productos**
+
+41. En **Productos > Alta de productos**, da de alta un producto con 40 unidades en un hueco: debe aparecer en el catálogo con ese stock y su código.
+42. Descarga la plantilla, rellénala con dos productos (uno en dos huecos) y súbela. Si una colección no existe, debe indicarlo; al marcar **Crear las colecciones que no existen**, debe dejar importar.
+43. Registra una salida de 12 unidades sin evento: no debe dejar guardarla. Con el evento «Gala 2026», sí. En el panel, **Pendientes de devolución** debe mostrar 12.
+44. En **Préstamos**, pulsa **Devolver** en esa línea y devuelve 10: debe indicar que quedan 2 pendientes de ese evento. Intenta devolver 5 más: no debe dejarlo.
+
 ## Base de datos en resumen
 
 | Migración | Contenido |
@@ -366,8 +397,9 @@ Se puede filtrar y exportar a Excel. El registro no se puede modificar ni borrar
 | 008 | Filtro del catálogo por ubicación |
 | 009 | Eliminación de elementos, registro de modificaciones y ajustes negativos del panel |
 | 010 | Blindaje de seguridad (también en `supabase/security_fix.sql`) |
+| 011 | Préstamos para eventos, devoluciones y alta inicial de productos |
 
-Las diez se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
+Las once se aplican en orden (o todas juntas con `supabase/instalar_todo.sql`) y se pueden repetir sin efectos. Se han probado sobre una base de datos montada con los scripts oficiales de inicialización de Supabase, su servicio de almacenamiento y la extensión `supautils`, ejecutándolas como el usuario `postgres` del SQL Editor. Esas pruebas incluyen un proyecto nuevo, varias repeticiones seguidas, una instalación previa con la versión anterior y un proyecto sin permisos por defecto. Todas las escrituras de mercancía pasan por funciones (`registrar_entrada`, `registrar_salida`, `registrar_traslado`, `registrar_ajuste`) que validan permisos y datos. Nadie puede escribir directamente en `movimientos` ni en `stock_por_ubicacion`.
 
 ## Cómo se ha probado
 
