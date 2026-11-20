@@ -1,4 +1,4 @@
-import { PackagePlus } from 'lucide-react';
+import { PackagePlus, Undo2 } from 'lucide-react';
 import { PaginaMovimientos } from '@/components/PaginaMovimientos';
 
 export function EntradasPage() {
@@ -11,6 +11,7 @@ export function EntradasPage() {
       rutaNueva="/entradas/nueva"
       textoNueva="Registrar entrada"
       icono={<PackagePlus className="h-4 w-4" />}
+      extra={{ ruta: '/devoluciones/nueva', texto: 'Registrar devolución', icono: <Undo2 className="h-4 w-4" /> }}
     />
   );
 }
