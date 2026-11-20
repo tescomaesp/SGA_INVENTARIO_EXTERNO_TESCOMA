@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { PackagePlus } from 'lucide-react';
+import { ListPlus, PackagePlus } from 'lucide-react';
 import { Boton, CabeceraPagina } from '@/components/ui';
 import { useAuth } from '@/features/auth/ProveedorAuth';
 import { GestionColecciones } from './GestionColecciones';
@@ -24,7 +24,14 @@ export function ProductosPage() {
       <CabeceraPagina
         titulo="Productos"
         descripcion="Catálogo con el stock de cada referencia."
-        acciones={puede('registrar_movimientos') && <Boton icono={<PackagePlus className="h-4 w-4" />} onClick={() => navigate('/entradas/nueva')}>Registrar entrada</Boton>}
+        acciones={
+          <>
+            {puede('editar_productos') && (
+              <Boton variante="secundario" icono={<ListPlus className="h-4 w-4" />} onClick={() => navigate('/productos/alta')}>Alta de productos</Boton>
+            )}
+            {puede('registrar_movimientos') && <Boton icono={<PackagePlus className="h-4 w-4" />} onClick={() => navigate('/entradas/nueva')}>Registrar entrada</Boton>}
+          </>
+        }
       />
       <div className="mb-5 flex gap-1 overflow-x-auto border-b border-linea" role="tablist">
         {PESTANAS.map(([id, texto]) => (
