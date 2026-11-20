@@ -1,4 +1,5 @@
 export const MOTIVOS_SALIDA = {
+  prestamo: 'Préstamo para evento',
   envio: 'Envío a cliente',
   devolucion: 'Devolución a proveedor',
   merma: 'Merma o rotura',
@@ -19,5 +20,7 @@ export type MotivoAjuste = keyof typeof MOTIVOS_AJUSTE;
 export function textoMotivo(motivo: string | null): string | null {
   if (!motivo) return null;
   if (motivo === 'eliminacion') return 'Retirada al eliminar el producto';
+  if (motivo === 'devolucion_prestamo') return 'Devolución de préstamo';
+  if (motivo === 'carga_inicial') return 'Carga inicial';
   return (MOTIVOS_SALIDA as Record<string, string>)[motivo] ?? (MOTIVOS_AJUSTE as Record<string, string>)[motivo] ?? motivo;
 }
