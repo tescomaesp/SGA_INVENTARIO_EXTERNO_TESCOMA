@@ -6,11 +6,13 @@ interface Props {
   valor: string;
   onCambio: (v: string) => void;
   maximo?: number;
+  /** Texto si se supera el máximo (por defecto: «Solo hay N disponibles.»). */
+  textoExceso?: (maximo: number) => string;
   error?: string;
 }
 
 /** Cantidad con botón para llevarse todo lo disponible. */
-export function CampoCantidad({ id, valor, onCambio, maximo, error }: Props) {
+export function CampoCantidad({ id, valor, onCambio, maximo, error, textoExceso }: Props) {
   const n = leerCantidad(valor);
   const excede = maximo !== undefined && n !== null && n > maximo;
   return (
@@ -27,7 +29,7 @@ export function CampoCantidad({ id, valor, onCambio, maximo, error }: Props) {
         )}
       </div>
       {excede ? (
-        <p className="mt-1.5 text-sm text-peligro" role="alert">Solo hay {formatearCantidad(maximo!)} disponibles.</p>
+        <p className="mt-1.5 text-sm text-peligro" role="alert">{textoExceso ? textoExceso(maximo!) : `Solo hay ${formatearCantidad(maximo!)} disponibles.`}</p>
       ) : error ? (
         <p className="mt-1.5 text-sm text-peligro" role="alert">{error}</p>
       ) : null}

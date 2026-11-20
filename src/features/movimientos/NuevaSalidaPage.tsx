@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, PackageMinus } from 'lucide-react';
 import { Placa } from '@/components/Placa';
@@ -10,6 +10,7 @@ import { MOTIVOS_SALIDA, type MotivoSalida } from '@/lib/motivos';
 import type { FilaStock } from '@/types/catalogo';
 import { movimientosApi } from './api';
 import { CampoCantidad } from './CampoCantidad';
+import { prestamosApi } from '@/features/prestamos/api';
 import { Confirmacion } from './Confirmacion';
 import { SelectorOrigen } from './SelectorOrigen';
 
@@ -18,7 +19,11 @@ export function NuevaSalidaPage() {
   const [params] = useSearchParams();
   const [origen, setOrigen] = useState<FilaStock | null>(null);
   const [cantidadTexto, setCantidadTexto] = useState('');
-  const [motivo, setMotivo] = useState<MotivoSalida | ''>('');
+  const [motivo, setMotivo] = useState<MotivoSalida | ''>('prestamo');
+  const [eventosAbiertos, setEventosAbiertos] = useState<string[]>([]);
+  useEffect(() => {
+    prestamosApi.eventosAbiertos().then(setEventosAbiertos).catch(() => {});
+  }, []);
   const [destino, setDestino] = useState('');
   const [documento, setDocumento] = useState('');
   const [notas, setNotas] = useState('');
@@ -37,6 +42,7 @@ export function NuevaSalidaPage() {
     else if (origen && cantidad > origen.cantidad) err.cantidad = `Solo hay ${formatearCantidad(origen.cantidad)} disponibles.`;
     if (!motivo) err.motivo = 'Elige el motivo.';
     if (motivo === 'otro' && !notas.trim()) err.notas = 'Explica qué ha pasado.';
+    if (motivo && motivo !== 'merma' && !destino.trim()) err.destino = 'Indica el evento o destino: todo lo que sale tiene que volver.';
     return err;
   };
   const errores = intentado ? validar() : {};
@@ -129,8 +135,17 @@ export function NuevaSalidaPage() {
                 ))}
               </Selector>
             </Campo>
-            <Campo etiqueta="Destino" htmlFor="destino" ayuda="Cliente, tienda, proveedor…">
-              <Entrada id="destino" value={destino} maxLength={200} onChange={(e) => setDestino(e.target.value)} />
+            <Campo
+              etiqueta="Evento o destino"
+              htmlFor="destino"
+              obligatorio={motivo !== 'merma'}
+              error={errores.destino}
+              ayuda={motivo === 'merma' ? 'No hace falta en una merma.' : 'Para saber dónde está y reclamar la devolución. Elige uno abierto o escribe uno nuevo.'}
+            >
+              <Entrada id="destino" value={destino} maxLength={200} list="eventos-abiertos" onChange={(e) => setDestino(e.target.value)} />
+              <datalist id="eventos-abiertos">
+                {eventosAbiertos.map((e) => <option key={e} value={e} />)}
+              </datalist>
             </Campo>
             <Campo etiqueta="Nº de pedido o albarán" htmlFor="documento">
               <Entrada id="documento" value={documento} maxLength={60} onChange={(e) => setDocumento(e.target.value)} />
