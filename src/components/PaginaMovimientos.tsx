@@ -17,10 +17,12 @@ interface Props {
   rutaNueva: string;
   textoNueva: string;
   icono: ReactNode;
+  /** Segunda acción opcional (p. ej. «Registrar devolución» en Entradas). */
+  extra?: { ruta: string; texto: string; icono: ReactNode };
 }
 
 /** Listado paginado de un tipo de movimiento con acceso al formulario de alta. */
-export function PaginaMovimientos({ tipo, titulo, descripcion, vacio, rutaNueva, textoNueva, icono }: Props) {
+export function PaginaMovimientos({ tipo, titulo, descripcion, vacio, rutaNueva, textoNueva, icono, extra }: Props) {
   const { puede } = useAuth();
   const navigate = useNavigate();
   const [lista, setLista] = useState<Movimiento[] | null>(null);
@@ -51,7 +53,14 @@ export function PaginaMovimientos({ tipo, titulo, descripcion, vacio, rutaNueva,
       <CabeceraPagina
         titulo={titulo}
         descripcion={descripcion}
-        acciones={puede('registrar_movimientos') && <Boton icono={icono} onClick={() => navigate(rutaNueva)}>{textoNueva}</Boton>}
+        acciones={
+          puede('registrar_movimientos') && (
+            <>
+              {extra && <Boton variante="secundario" icono={extra.icono} onClick={() => navigate(extra.ruta)}>{extra.texto}</Boton>}
+              <Boton icono={icono} onClick={() => navigate(rutaNueva)}>{textoNueva}</Boton>
+            </>
+          )
+        }
       />
       {error ? (
         <Aviso>{error}</Aviso>

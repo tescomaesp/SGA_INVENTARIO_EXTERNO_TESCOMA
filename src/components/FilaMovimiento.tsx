@@ -46,7 +46,7 @@ export function FilaMovimiento({ m, sinProducto }: { m: Movimiento; sinProducto?
         <p className="text-sm text-suave">
           {formatearFechaHora(m.fecha)}, {m.usuario_nombre}
           {m.contacto_nombre && <>, contacto {m.contacto_nombre}</>}
-          {m.destino_externo && <>, destino {m.destino_externo}</>}
+          {m.destino_externo && <>, {m.tipo === 'entrada' ? 'vuelve de' : 'evento o destino'} {m.destino_externo}</>}
           {m.documento && <>, doc. {m.documento}</>}
           {m.motivo && <>, {textoMotivo(m.motivo)?.toLowerCase()}</>}
         </p>
