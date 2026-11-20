@@ -79,7 +79,7 @@ export function LineaTemporal({ movimientos, sinProducto, saldo = null }: Props)
                       <p className="mt-1 text-sm text-suave">
                         {m.usuario_nombre}
                         {m.contacto_nombre && <>, contacto {m.contacto_nombre}</>}
-                        {m.destino_externo && <>, destino {m.destino_externo}</>}
+                        {m.destino_externo && <>, {m.tipo === 'entrada' ? 'vuelve de' : 'evento o destino'} {m.destino_externo}</>}
                         {m.documento && <>, doc. {m.documento}</>}
                       </p>
                       {m.notas && <p className="mt-0.5 text-sm italic">{m.notas}</p>}
