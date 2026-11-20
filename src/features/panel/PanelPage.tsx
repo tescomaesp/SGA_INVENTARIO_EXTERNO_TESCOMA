@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, CalendarClock, PackageMinus, PackagePlus, ShieldAlert } from 'lucide-react';
+import { ArrowLeftRight, PackageMinus, PackagePlus, ShieldAlert, Undo2 } from 'lucide-react';
 import { FilaMovimiento } from '@/components/FilaMovimiento';
 import { Miniatura } from '@/components/Miniatura';
 import { Aviso, Boton, Cargando } from '@/components/ui';
@@ -11,7 +11,8 @@ import { formatearCantidad } from '@/lib/cantidad';
 import { mensajeError } from '@/lib/errores';
 import { formatearFecha } from '@/lib/formato';
 import { supabase } from '@/lib/supabase';
-import type { Lote, Movimiento } from '@/types/catalogo';
+import { prestamosApi } from '@/features/prestamos/api';
+import type { Movimiento } from '@/types/catalogo';
 import { GraficoEntradasSalidas, type PuntoSerie } from './GraficoEntradasSalidas';
 
 interface ResumenPeriodo {
@@ -119,7 +120,7 @@ export function PanelPage() {
   const [modo, setModo] = useState<Modo>('dia');
   const [serie, setSerie] = useState<FilaSerie[] | null>(null);
   const [ajustesNeg, setAjustesNeg] = useState<AjusteNegativo[] | null>(null);
-  const [caducidades, setCaducidades] = useState<Lote[]>([]);
+  const [prestamos, setPrestamos] = useState<{ producto_id: string; nombre: string; sku: string; foto_url: string | null; pendiente: number; eventos: number; desde: string }[] | null>(null);
   const [pasillos, setPasillos] = useState<OcupacionPasillo[] | null>(null);
   const [ultimos, setUltimos] = useState<Movimiento[] | null>(null);
 
@@ -131,10 +132,20 @@ export function PanelPage() {
       setAjustesNeg(((data ?? []) as AjusteNegativo[]).map((a) => ({ ...a, unidades: Number(a.unidades) }))),
     );
 
-    const limite = new Date();
-    limite.setDate(limite.getDate() + 30);
-    supabase.from('v_lotes').select('*').gt('stock_actual', 0).lte('fecha_caducidad', fechaLocal(limite)).order('fecha_caducidad').limit(6)
-      .then(({ data }) => setCaducidades(((data ?? []) as Lote[]).map((l) => ({ ...l, stock_actual: Number(l.stock_actual) }))));
+    prestamosApi
+      .pendientes()
+      .then((lista) => {
+        const porProducto = new Map<string, { producto_id: string; nombre: string; sku: string; foto_url: string | null; pendiente: number; eventos: number; desde: string }>();
+        for (const p of lista) {
+          const g = porProducto.get(p.producto_id) ?? { producto_id: p.producto_id, nombre: p.nombre, sku: p.sku, foto_url: p.foto_url, pendiente: 0, eventos: 0, desde: p.primera_salida };
+          g.pendiente += p.pendiente;
+          g.eventos += 1;
+          if (p.primera_salida < g.desde) g.desde = p.primera_salida;
+          porProducto.set(p.producto_id, g);
+        }
+        setPrestamos([...porProducto.values()].sort((a, b) => b.pendiente - a.pendiente));
+      })
+      .catch(() => setPrestamos([]));
 
     todasLasFilas<{ almacen_codigo: string; almacen_nombre: string; pasillo_codigo: string; capacidad: number | null; unidades: number }>(() =>
       supabase.from('v_informe_ubicaciones').select('almacen_codigo, almacen_nombre, pasillo_codigo, capacidad, unidades').order('codigo_completo'),
@@ -183,8 +194,6 @@ export function PanelPage() {
   if (!perfil) return null;
   const nombre = perfil.nombre_completo.split(' ')[0] || perfil.email;
   const hoyTexto = fmtHoy.format(new Date());
-  const hoy = fechaLocal();
-
   const ocupacion = ind
     ? ind.huecos.capacidad > 0
       ? { valor: `${formatearCantidad(Math.round((Number(ind.huecos.unidades_con_capacidad) * 1000) / Number(ind.huecos.capacidad)) / 10)} %`, detalle: `${ind.huecos.con_mercancia} de ${ind.huecos.total} huecos con mercancía` }
@@ -202,6 +211,7 @@ export function PanelPage() {
           <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
             <Boton icono={<PackagePlus className="h-5 w-5" />} onClick={() => navigate('/entradas/nueva')} className="flex-col sm:flex-row">Entrada</Boton>
             <Boton icono={<PackageMinus className="h-5 w-5" />} onClick={() => navigate('/salidas/nueva')} className="flex-col sm:flex-row">Salida</Boton>
+            <Boton variante="secundario" icono={<Undo2 className="h-5 w-5" />} onClick={() => navigate('/devoluciones/nueva')} className="flex-col sm:flex-row">Devolución</Boton>
             <Boton variante="secundario" icono={<ArrowLeftRight className="h-5 w-5" />} onClick={() => navigate('/traslados/nueva')} className="flex-col sm:flex-row">Traslado</Boton>
           </div>
         )}
@@ -300,29 +310,33 @@ export function PanelPage() {
             )}
           </Bloque>
 
-          <Bloque titulo="Caducidades">
-            {caducidades.length === 0 ? (
-              <p className="px-4 py-6 text-suave">Ningún lote con stock caduca en los próximos 30 días.</p>
+          <Bloque titulo="Pendientes de devolución" enlace={{ a: '/prestamos', texto: 'Ver todos los préstamos' }}>
+            {!prestamos ? (
+              <Cargando />
+            ) : prestamos.length === 0 ? (
+              <p className="px-4 py-6 text-suave">Nada pendiente: todo lo que ha salido ha vuelto al almacén.</p>
             ) : (
-              <ul className="divide-y divide-linea/70">
-                {caducidades.map((l) => {
-                  const caducado = !!l.fecha_caducidad && l.fecha_caducidad < hoy;
-                  return (
-                    <li key={l.id}>
-                      <Link to={`/trazabilidad/lote/${l.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-fondo/60">
-                        <CalendarClock className={`h-5 w-5 shrink-0 ${caducado ? 'text-peligro' : 'text-suave'}`} aria-hidden />
+              <>
+                <p className="px-4 pt-3 text-sm text-suave">
+                  {formatearCantidad(prestamos.reduce((t, p) => t + p.pendiente, 0))} uds de {prestamos.length} {prestamos.length === 1 ? 'producto' : 'productos'} fuera del almacén.
+                </p>
+                <ul className="mt-2 divide-y divide-linea/70">
+                  {prestamos.slice(0, 8).map((p) => (
+                    <li key={p.producto_id}>
+                      <Link to={`/prestamos?vista=producto&q=${encodeURIComponent(p.sku)}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-fondo/60">
+                        <Miniatura ruta={p.foto_url} tamano={40} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{l.producto_nombre}</span>
-                          <span className={`block text-sm ${caducado ? 'font-semibold text-peligro' : 'text-suave'}`}>
-                            Lote {l.codigo}, {caducado ? 'caducó' : 'caduca'} el {formatearFecha(l.fecha_caducidad!)}
+                          <span className="block truncate font-medium">{p.nombre}</span>
+                          <span className="block text-sm text-suave">
+                            {p.sku}, {p.eventos === 1 ? 'en 1 evento' : `en ${p.eventos} eventos`}, fuera desde el {formatearFecha(p.desde)}
                           </span>
                         </span>
-                        <span className="font-rotulo text-xl font-bold tabular-nums">{formatearCantidad(l.stock_actual)}</span>
+                        <span className="font-rotulo text-xl font-bold tabular-nums text-peligro">{formatearCantidad(p.pendiente)}</span>
                       </Link>
                     </li>
-                  );
-                })}
-              </ul>
+                  ))}
+                </ul>
+              </>
             )}
           </Bloque>
 
